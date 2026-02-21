@@ -65,14 +65,17 @@ const Player = {
     Store.setQueueIdx(this.queueIdx);
 
     if (!track.previewUrl) {
-      UI.toast('Aperçu non disponible pour ce titre', 'error');
+      UI.toast('Audio non disponible pour ce titre', 'error');
       return;
     }
 
+    console.info(`[NexSon] Lecture : ${track.trackName} | source: ${track.source || 'unknown'} | url: ${track.previewUrl}`);
+
     this.audio.src = track.previewUrl;
+    this.audio.load();
     this.audio.play().catch(err => {
-      console.error('Playback error:', err);
-      UI.toast('Impossible de lire ce titre', 'error');
+      console.error('[NexSon] Playback error:', err);
+      UI.toast('Impossible de lire ce titre — essaie le suivant', 'error');
     });
 
     Store.addRecent(track);

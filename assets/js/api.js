@@ -12,6 +12,12 @@ const API = {
 
   /* ── Normalize Jamendo track → internal format ── */
   _normalizeJamendo(t) {
+    // Construct the stream URL directly from track ID.
+    // This works regardless of whether the API returned the 'audio' field,
+    // and gives the full track (not a 30-second preview).
+    const streamUrl = t.audio
+      || `https://mp3l.jamendo.com/?trackid=${t.id}&format=mp32&from=app-devsite`;
+
     return {
       trackId:        'j_' + t.id,
       trackName:      t.name || 'Inconnu',
@@ -20,7 +26,7 @@ const API = {
       collectionId:   t.album_id ? 'ja_' + t.album_id : '',
       artworkUrl:     t.album_image || t.image || '',
       artworkSmall:   t.image || t.album_image || '',
-      previewUrl:     t.audio || null,   // ← FULL stream, not a preview!
+      previewUrl:     streamUrl,   // ← URL du titre COMPLET Jamendo
       duration:       t.duration || 0,
       genre:          t.musicinfo?.tags?.genres?.[0] || '',
       releaseDate:    t.releasedate || '',
@@ -43,14 +49,16 @@ const API = {
         `&audioformat=mp32&include=musicinfo&order=popularity_total`;
 
       const resp = await fetch(url);
-      if (!resp.ok) throw new Error('Jamendo error');
+      if (!resp.ok) throw new Error(`Jamendo HTTP ${resp.status}`);
       const data = await resp.json();
       const results = (data.results || []).map(t => this._normalizeJamendo(t));
+      console.info(`[NexSon] Jamendo: ${results.length} titres pour "${term}"`);
       this._cache[cacheKey] = results;
       return results;
     } catch (e) {
-      console.error('Jamendo search error:', e);
-      return this._iTunesFallback(term, limit);
+      console.error('[NexSon] Jamendo search error:', e.message);
+      // Ne pas retomber silencieusement sur iTunes (30s) — retourner vide
+      return [];
     }
   },
 
@@ -66,13 +74,14 @@ const API = {
         `&audioformat=mp32&include=musicinfo&order=popularity_total`;
 
       const resp = await fetch(url);
-      if (!resp.ok) throw new Error('Jamendo tag error');
+      if (!resp.ok) throw new Error(`Jamendo HTTP ${resp.status}`);
       const data = await resp.json();
       const results = (data.results || []).map(t => this._normalizeJamendo(t));
       if (results.length === 0) return this.search(tag, limit);
       this._cache[cacheKey] = results;
       return results;
     } catch (e) {
+      console.error('[NexSon] Jamendo tag error:', e.message);
       return this.search(tag, limit);
     }
   },
