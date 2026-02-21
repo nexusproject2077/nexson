@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VIBE – Premium Music Streaming</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%238b5cf6'/><stop offset='100%25' stop-color='%23ec4899'/></linearGradient></defs><circle cx='50' cy='50' r='45' fill='url(%23g)'/><text y='.9em' font-size='60' x='18' fill='white'>♪</text></svg>">
+  <title>NexSon – Premium Music Streaming</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%238b5cf6'/><stop offset='100%25' stop-color='%23ec4899'/></linearGradient></defs><circle cx='50' cy='50' r='45' fill='url(%23g)'/><path d='M35 65V35l30 15-30 15z' fill='white'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -24,12 +24,12 @@
       <div class="auth-logo">
         <svg width="40" height="40" viewBox="0 0 40 40"><defs><linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs><circle cx="20" cy="20" r="19" fill="url(#lg1)"/><path d="M13 26V14l14 6-14 6z" fill="white"/></svg>
       </div>
-      <span class="auth-brand-name">VIBE</span>
+      <span class="auth-brand-name">NexSon</span>
     </div>
     <div class="auth-card" id="auth-card">
       <!-- Login Form -->
       <div id="login-form" class="auth-form active">
-        <h1 class="auth-title">Bon retour !</h1>
+        <h1 class="auth-title">Bon retour sur NexSon !</h1>
         <p class="auth-subtitle">Connecte-toi pour continuer à écouter</p>
         <div class="form-group">
           <label>Email</label>
@@ -52,17 +52,17 @@
         </div>
         <button class="btn-auth" onclick="Auth.login()">Se connecter</button>
         <div class="auth-divider"><span>ou</span></div>
-        <button class="btn-auth btn-google" onclick="Auth.loginDemo()">
-          <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-          Continuer avec Google
+        <button class="btn-auth btn-demo" onclick="Auth.loginDemo()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v14l11-7z"/></svg>
+          Accès démo rapide
         </button>
         <p class="auth-switch">Pas encore de compte ? <a href="#" onclick="Auth.showRegister()">Crée-en un</a></p>
       </div>
 
       <!-- Register Form -->
       <div id="register-form" class="auth-form">
-        <h1 class="auth-title">Rejoins VIBE</h1>
-        <p class="auth-subtitle">Gratuit, sans limite. Pour toujours.</p>
+        <h1 class="auth-title">Rejoins NexSon</h1>
+        <p class="auth-subtitle">Titres complets, gratuit, sans limite. Pour toujours.</p>
         <div class="form-group">
           <label>Nom d'affichage</label>
           <input type="text" id="register-name" placeholder="Ton nom" autocomplete="name">
@@ -90,9 +90,24 @@
       </div>
     </div>
     <div class="auth-features">
-      <div class="feature-item"><span class="feature-icon">🎵</span> Millions de titres</div>
-      <div class="feature-item"><span class="feature-icon">🎤</span> Paroles en temps réel</div>
-      <div class="feature-item"><span class="feature-icon">♾️</span> 100% Gratuit</div>
+      <div class="feature-item">
+        <span class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </span>
+        Titres complets gratuits
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        Paroles en temps réel
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+        </span>
+        100% Gratuit
+      </div>
     </div>
   </div>
 </div>
@@ -105,7 +120,7 @@
     <div class="sidebar-top">
       <div class="sidebar-brand" onclick="Router.navigate('home')">
         <svg width="32" height="32" viewBox="0 0 40 40"><defs><linearGradient id="lg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs><circle cx="20" cy="20" r="19" fill="url(#lg2)"/><path d="M13 26V14l14 6-14 6z" fill="white"/></svg>
-        <span>VIBE</span>
+        <span>NexSon</span>
       </div>
       <nav class="sidebar-nav">
         <a class="nav-item active" data-route="home" onclick="Router.navigate('home')">
@@ -144,7 +159,7 @@
         <div class="user-avatar" id="user-avatar">U</div>
         <div class="user-info">
           <span class="user-name" id="user-display-name">Utilisateur</span>
-          <span class="user-plan">Gratuit ∞</span>
+          <span class="user-plan">NexSon Free</span>
         </div>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
@@ -171,7 +186,7 @@
         <div class="topbar-search-wrap" id="topbar-search-wrap">
           <div class="topbar-search">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input type="text" id="main-search" placeholder="Artistes, titres, albums, podcasts…" oninput="Search.handleInput(this.value)" onkeydown="Search.handleKey(event)">
+            <input type="text" id="main-search" placeholder="Artistes, titres, albums…" oninput="Search.handleInput(this.value)" onkeydown="Search.handleKey(event)" onfocus="Search.handleFocus()" autocomplete="off">
             <button class="search-clear hidden" id="search-clear" onclick="Search.clear()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -179,6 +194,9 @@
         </div>
       </div>
       <div class="topbar-right">
+        <button class="btn-icon mobile-search-btn" id="mobile-search-btn" onclick="Search.toggleMobileSearch()" title="Rechercher">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
         <button class="btn-icon" onclick="UI.toggleQueue()" title="File d'attente" id="queue-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         </button>

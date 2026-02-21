@@ -1,5 +1,5 @@
 /* ============================================
-   VIBE – Router (SPA Navigation)
+   NexSon – Router (SPA Navigation)
    ============================================ */
 
 const Router = {
@@ -8,24 +8,15 @@ const Router = {
 
   /* ── Navigate to a view ── */
   navigate(route, params = {}) {
-    // Update active nav
     UI.setActiveNav(route);
     UI.scrollTop();
 
-    // Close side panels & menus
     document.getElementById('user-dropdown')?.classList.add('hidden');
     UI.closeContextMenu();
 
-    // Update sidebar playlists active state
     window._currentRoute = route;
-    if (params.id && (route === 'playlist')) {
+    if (params.id && route === 'playlist') {
       window._currentRoute = `${route}_${params.id}`;
-    }
-
-    // Topbar search visibility
-    const searchWrap = document.getElementById('topbar-search-wrap');
-    if (searchWrap) {
-      searchWrap.style.display = route === 'search' ? 'none' : '';
     }
 
     // Push to history
@@ -42,6 +33,12 @@ const Router = {
 
     // Update sidebar playlists highlight
     UI.renderSidebarPlaylists();
+
+    // On mobile, close the sidebar after navigation
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && window.innerWidth <= 900) {
+      sidebar.classList.remove('open');
+    }
   },
 
   /* ── Go back ── */
@@ -73,15 +70,15 @@ const Router = {
   /* ── Render view by route ── */
   _render(route, params) {
     switch (route) {
-      case 'home':     Views.renderHome();            break;
-      case 'search':   Views.renderSearch();          break;
-      case 'library':  Views.renderLibrary();         break;
-      case 'liked':    Views.renderLiked();           break;
+      case 'home':     Views.renderHome();              break;
+      case 'search':   Views.renderSearch();            break;
+      case 'library':  Views.renderLibrary();           break;
+      case 'liked':    Views.renderLiked();             break;
       case 'playlist': Views.renderPlaylist(params.id); break;
-      case 'artist':   Views.renderArtist(params);   break;
-      case 'album':    Views.renderAlbum(params);     break;
-      case 'profile':  Views.renderProfile();         break;
-      case 'settings': Views.renderSettings();        break;
+      case 'artist':   Views.renderArtist(params);      break;
+      case 'album':    Views.renderAlbum(params);       break;
+      case 'profile':  Views.renderProfile();           break;
+      case 'settings': Views.renderSettings();          break;
       default:         Views.renderHome();
     }
   },

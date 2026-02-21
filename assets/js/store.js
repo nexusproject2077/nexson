@@ -5,19 +5,19 @@
 const Store = {
   // Keys
   KEYS: {
-    USER:           'vibe_user',
-    USERS:          'vibe_users',
-    LIKED:          'vibe_liked',
-    PLAYLISTS:      'vibe_playlists',
-    RECENT:         'vibe_recent',
-    QUEUE:          'vibe_queue',
-    QUEUE_IDX:      'vibe_queue_idx',
-    SHUFFLE:        'vibe_shuffle',
-    REPEAT:         'vibe_repeat',
-    VOLUME:         'vibe_volume',
-    THEME:          'vibe_theme',
-    SAVED_ALBUMS:   'vibe_albums',
-    FOLLOWED:       'vibe_followed',
+    USER:           'nexson_user',
+    USERS:          'nexson_users',
+    LIKED:          'nexson_liked',
+    PLAYLISTS:      'nexson_playlists',
+    RECENT:         'nexson_recent',
+    QUEUE:          'nexson_queue',
+    QUEUE_IDX:      'nexson_queue_idx',
+    SHUFFLE:        'nexson_shuffle',
+    REPEAT:         'nexson_repeat',
+    VOLUME:         'nexson_volume',
+    THEME:          'nexson_theme',
+    SAVED_ALBUMS:   'nexson_albums',
+    FOLLOWED:       'nexson_followed',
   },
 
   _get(key, fallback = null) {

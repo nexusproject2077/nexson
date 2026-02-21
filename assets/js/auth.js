@@ -1,8 +1,11 @@
 /* ============================================
-   VIBE – Authentication Module
+   NexSon – Authentication Module
+   MongoDB backend (with localStorage fallback)
    ============================================ */
 
 const Auth = {
+  _token: null,
+
   /* ── Show/hide forms ── */
   showLogin() {
     document.getElementById('login-form').classList.add('active');
@@ -11,63 +14,81 @@ const Auth = {
   showRegister() {
     document.getElementById('register-form').classList.add('active');
     document.getElementById('login-form').classList.remove('active');
-    // Set up password strength meter
     const pwd = document.getElementById('register-password');
     if (pwd) pwd.addEventListener('input', () => Auth._checkStrength(pwd.value));
   },
 
   /* ── Login ── */
-  login() {
+  async login() {
     const email = document.getElementById('login-email').value.trim();
     const pass  = document.getElementById('login-password').value;
-    if (!email || !pass) {
-      return UI.toast('Remplis tous les champs', 'error');
+    if (!email || !pass) return UI.toast('Remplis tous les champs', 'error');
+
+    const btn = document.querySelector('#login-form .btn-auth');
+    if (btn) { btn.disabled = true; btn.textContent = 'Connexion…'; }
+
+    try {
+      if (CONFIG.USE_BACKEND) {
+        await this._loginBackend(email, pass);
+      } else {
+        this._loginLocal(email, pass);
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Se connecter'; }
     }
+  },
+
+  _loginLocal(email, pass) {
     const user = Store.findUser(email);
-    if (!user) {
-      return UI.toast('Aucun compte trouvé pour cet email', 'error');
-    }
-    if (user.password !== Auth._hashSimple(pass)) {
-      return UI.toast('Mot de passe incorrect', 'error');
-    }
+    if (!user) return UI.toast('Aucun compte trouvé pour cet email', 'error');
+    if (user.password !== Auth._hashSimple(pass)) return UI.toast('Mot de passe incorrect', 'error');
     Auth._startSession(user);
   },
 
-  /* ── Demo login (Google simulation) ── */
-  loginDemo() {
-    const demo = {
-      id:       'demo_user',
-      name:     'Demo User',
-      email:    'demo@vibe.music',
-      avatar:   null,
-      joinedAt: Date.now(),
-    };
-    // Save if not exists
-    if (!Store.findUser(demo.email)) {
-      Store.saveUser(demo.email, { ...demo, password: Auth._hashSimple('demo') });
+  async _loginBackend(email, pass) {
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass }),
+      });
+      const data = await res.json();
+      if (!res.ok) return UI.toast(data.message || 'Erreur de connexion', 'error');
+      Auth._token = data.token;
+      localStorage.setItem('nexson_token', data.token);
+      Auth._startSession(data.user);
+    } catch {
+      UI.toast('Serveur indisponible. Connexion locale.', 'info');
+      Auth._loginLocal(email, pass);
     }
-    Auth._startSession(demo);
   },
 
   /* ── Register ── */
-  register() {
+  async register() {
     const name  = document.getElementById('register-name').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const pass  = document.getElementById('register-password').value;
 
-    if (!name || !email || !pass) {
-      return UI.toast('Remplis tous les champs', 'error');
-    }
-    if (!Auth._validEmail(email)) {
-      return UI.toast('Email invalide', 'error');
-    }
-    if (pass.length < 6) {
-      return UI.toast('Le mot de passe doit faire au moins 6 caractères', 'error');
-    }
-    if (Store.findUser(email)) {
-      return UI.toast('Un compte existe déjà avec cet email', 'error');
-    }
+    if (!name || !email || !pass) return UI.toast('Remplis tous les champs', 'error');
+    if (!Auth._validEmail(email)) return UI.toast('Email invalide', 'error');
+    if (pass.length < 6) return UI.toast('Le mot de passe doit faire au moins 6 caractères', 'error');
 
+    const btn = document.querySelector('#register-form .btn-auth');
+    if (btn) { btn.disabled = true; btn.textContent = 'Création…'; }
+
+    try {
+      if (CONFIG.USE_BACKEND) {
+        await this._registerBackend(name, email, pass);
+      } else {
+        this._registerLocal(name, email, pass);
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Créer mon compte'; }
+    }
+  },
+
+  _registerLocal(name, email, pass) {
+    if (Store.findUser(email)) return UI.toast('Un compte existe déjà avec cet email', 'error');
     const user = {
       id:       'u_' + Date.now(),
       name,
@@ -78,7 +99,41 @@ const Auth = {
     };
     Store.saveUser(email, user);
     Auth._startSession(user);
-    UI.toast(`Bienvenue sur VIBE, ${name} !`, 'success');
+    UI.toast(`Bienvenue sur NexSon, ${name} !`, 'success');
+  },
+
+  async _registerBackend(name, email, pass) {
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password: pass }),
+      });
+      const data = await res.json();
+      if (!res.ok) return UI.toast(data.message || 'Erreur lors de la création', 'error');
+      Auth._token = data.token;
+      localStorage.setItem('nexson_token', data.token);
+      Auth._startSession(data.user);
+      UI.toast(`Bienvenue sur NexSon, ${name} !`, 'success');
+    } catch {
+      UI.toast('Serveur indisponible. Inscription locale.', 'info');
+      Auth._registerLocal(name, email, pass);
+    }
+  },
+
+  /* ── Demo login ── */
+  loginDemo() {
+    const demo = {
+      id:       'demo_user',
+      name:     'Demo User',
+      email:    'demo@nexson.music',
+      avatar:   null,
+      joinedAt: Date.now(),
+    };
+    if (!Store.findUser(demo.email)) {
+      Store.saveUser(demo.email, { ...demo, password: Auth._hashSimple('demo') });
+    }
+    Auth._startSession(demo);
   },
 
   /* ── Start session ── */
@@ -95,6 +150,8 @@ const Auth = {
   /* ── Logout ── */
   logout() {
     Store.clearUser();
+    Auth._token = null;
+    localStorage.removeItem('nexson_token');
     document.getElementById('app').classList.add('hidden');
     document.getElementById('auth-screen').classList.remove('hidden');
     Auth.showLogin();
@@ -110,7 +167,7 @@ const Auth = {
     if (nameEl) nameEl.textContent = user.name;
     if (avatarEl) {
       if (user.avatar) {
-        avatarEl.innerHTML = `<img src="${user.avatar}" alt="${user.name}">`;
+        avatarEl.innerHTML = `<img src="${user.avatar}" alt="${user.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
       } else {
         avatarEl.textContent = user.name.charAt(0).toUpperCase();
       }
@@ -118,7 +175,24 @@ const Auth = {
   },
 
   /* ── Check existing session ── */
-  checkSession() {
+  async checkSession() {
+    // Check JWT token first
+    const token = localStorage.getItem('nexson_token');
+    if (token && CONFIG.USE_BACKEND) {
+      try {
+        const res = await fetch(`${CONFIG.API_BASE}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          Auth._token = token;
+          Auth._startSession(data.user);
+          return true;
+        }
+      } catch {}
+    }
+
+    // Fallback to localStorage session
     const user = Store.getUser();
     if (user) {
       Auth._applyUserToUI(user);
@@ -157,7 +231,6 @@ const Auth = {
   /* ── Helpers ── */
   _validEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); },
 
-  // Simple (non-secure) hash for demo — in production use bcrypt on server
   _hashSimple(str) {
     let h = 0;
     for (let i = 0; i < str.length; i++) {
@@ -173,7 +246,6 @@ const Auth = {
     if (!user) return;
     const updated = { ...user, ...updates };
     Store.setUser(updated);
-    // Also update in users store
     const storedUser = Store.findUser(user.email);
     if (storedUser) Store.saveUser(user.email, { ...storedUser, ...updates });
     Auth._applyUserToUI(updated);

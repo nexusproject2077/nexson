@@ -157,7 +157,7 @@ const Player = {
     const liked = Store.toggleLike(track);
     const btn   = document.getElementById('player-like-btn');
     if (btn) btn.classList.toggle('liked', liked);
-    UI.toast(liked ? '❤️ Ajouté aux titres aimés' : 'Retiré des titres aimés', liked ? 'success' : 'info');
+    UI.toast(liked ? 'Ajouté aux titres aimés' : 'Retiré des titres aimés', liked ? 'success' : 'info');
     // Also update in track list if visible
     UI.updateLikeButtons(track.trackId, liked);
     // Refresh sidebar playlists if on liked view
@@ -303,7 +303,7 @@ const Player = {
     if (likeBtn) likeBtn.classList.toggle('liked', Store.isLiked(track.trackId));
 
     // Update page title
-    document.title = `${track.trackName} – ${track.artistName} | VIBE`;
+    document.title = `${track.trackName} – ${track.artistName} | NexSon`;
   },
 
   _updatePlayUI(playing) {

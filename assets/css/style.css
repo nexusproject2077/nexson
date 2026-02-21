@@ -254,6 +254,14 @@ img { display: block; max-width: 100%; }
 .btn-auth:hover::after { background: rgba(255,255,255,0.08); }
 .btn-auth:active { transform: scale(0.99); }
 
+.btn-demo {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid var(--border-medium);
+  margin-top: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.btn-demo:hover { background: rgba(255,255,255,0.1) !important; }
+/* Keep for backward compat */
 .btn-google {
   background: rgba(255,255,255,0.06) !important;
   border: 1px solid var(--border-medium);
@@ -941,7 +949,9 @@ img { display: block; max-width: 100%; }
 }
 .section-title {
   font-size: 22px; font-weight: 800; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
 }
+.section-title svg { flex-shrink: 0; }
 .section-title:hover { text-decoration: underline; }
 .section-see-all {
   font-size: 13px; font-weight: 600; color: var(--text-muted);
@@ -1077,6 +1087,12 @@ img { display: block; max-width: 100%; }
   font-size: 16px; font-weight: 800; position: relative; z-index: 1;
 }
 .genre-emoji { position: absolute; top: 12px; right: 12px; font-size: 32px; opacity: 0.7; }
+.genre-icon {
+  position: absolute; top: 12px; right: 12px;
+  width: 36px; height: 36px; opacity: 0.75;
+  display: flex; align-items: center; justify-content: center;
+}
+.genre-icon svg { width: 100%; height: 100%; color: white; }
 
 /* Search results */
 .search-results-section { margin-bottom: 40px; }
@@ -1392,6 +1408,9 @@ img { display: block; max-width: 100%; }
   50% { transform: scaleY(1); }
 }
 
+/* Mobile search button — hidden on desktop */
+.mobile-search-btn { display: none !important; }
+
 /* Mobile sidebar toggle */
 .sidebar-toggle {
   display: none;
@@ -1438,8 +1457,68 @@ img { display: block; max-width: 100%; }
   .player-controls { flex: 1; }
   .cards-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .auth-card { padding: 28px 24px; }
-  .topbar-search-wrap { display: none; }
   .hero-banner { padding: 24px; }
   .hero-title { font-size: 22px; }
   .hero-img { display: none; }
+
+  /* Mobile search: hidden by default, shown when toggled */
+  .topbar-search-wrap {
+    position: fixed; top: var(--topbar-h); left: 0; right: 0;
+    padding: 8px 16px; background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    z-index: 99; transform: translateY(-110%);
+    transition: transform 0.2s var(--ease-smooth);
+    max-width: 100%;
+  }
+  .topbar-search-wrap.mobile-open {
+    transform: translateY(0);
+  }
+  .topbar-search { border-radius: var(--radius-full); }
+  .mobile-search-btn { display: flex !important; }
+
+  /* Player bar mobile — compact */
+  .player-bar {
+    --player-h: 72px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .player-track { min-width: 0; }
+  .player-track-name { font-size: 13px; }
+  .player-track-artist { font-size: 11px; }
+  .player-controls { min-width: 0; }
+  .player-progress { display: none; }
+  .player-btn-play { width: 40px; height: 40px; }
+
+  /* Sections responsive */
+  .section-title { font-size: 18px; }
+  .genres-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .genre-card { padding: 12px; }
+  .genre-card-name { font-size: 14px; }
+
+  /* Track list mobile */
+  .track-album, .track-list-header span:nth-child(3) { display: none; }
+  .track-item { grid-template-columns: 36px 1fr auto auto; }
+  .track-list-header { grid-template-columns: 36px 1fr auto auto; }
+
+  /* Quick access */
+  .quick-access { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+  /* View header */
+  .view-title { font-size: 24px; }
+  .view-cover { width: 140px; height: 140px; }
+
+  /* Sidebar bottom */
+  .user-info { display: none; }
+  .user-menu { gap: 8px; }
+
+  /* Auth */
+  .auth-features { gap: 12px; }
+  .feature-item { font-size: 12px; padding: 8px 14px; }
+}
+
+/* Extra small screens */
+@media (max-width: 380px) {
+  .auth-card { padding: 24px 18px; }
+  .auth-title { font-size: 24px; }
+  .cards-grid { grid-template-columns: repeat(2, 1fr); }
+  .genres-grid { grid-template-columns: repeat(2, 1fr); }
 }

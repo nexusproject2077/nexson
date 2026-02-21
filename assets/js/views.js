@@ -23,7 +23,10 @@ const Views = {
       <!-- Hero Banner -->
       <div class="hero-banner" onclick="Router.navigate('search')">
         <div class="hero-content">
-          <div class="hero-tag">✨ Découverte</div>
+          <div class="hero-tag">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Découverte
+        </div>
           <h2 class="hero-title">Millions de titres,<br>100% gratuit</h2>
           <p class="hero-sub">Écoute, explore, partage.</p>
           <button class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;">
@@ -36,42 +39,64 @@ const Views = {
       <!-- Sections -->
       <div id="home-top-hits" class="section-block">
         <div class="section-header">
-          <span class="section-title">🔥 Top Hits</span>
-          <span class="section-see-all" onclick="Search.quick('top hits 2025')">Voir tout</span>
+          <span class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Top Hits
+          </span>
+          <span class="section-see-all" onclick="Search.quick('pop hits')">Voir tout</span>
         </div>
         <div class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
       </div>
 
       <div id="home-genres" class="section-block">
-        <div class="section-header"><span class="section-title">🎭 Parcourir les genres</span></div>
+        <div class="section-header">
+          <span class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            Parcourir les genres
+          </span>
+        </div>
         ${this._renderGenresGrid()}
       </div>
 
       <div id="home-chill" class="section-block">
         <div class="section-header">
-          <span class="section-title">😌 Chill Vibes</span>
-          <span class="section-see-all" onclick="Search.quick('lofi chill relax')">Voir tout</span>
+          <span class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            Chill Vibes
+          </span>
+          <span class="section-see-all" onclick="Search.quick('chillout ambient')">Voir tout</span>
         </div>
         <div class="loading-state"><div class="spinner"></div></div>
       </div>
 
       <div id="home-recent" class="section-block" style="display:none">
-        <div class="section-header"><span class="section-title">🕐 Récemment écouté</span></div>
+        <div class="section-header">
+          <span class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Récemment écouté
+          </span>
+        </div>
         <div id="home-recent-list"></div>
       </div>
 
       <div id="home-afro" class="section-block">
         <div class="section-header">
-          <span class="section-title">🥁 Afrobeats & RnB</span>
-          <span class="section-see-all" onclick="Search.quick('afrobeats rnb')">Voir tout</span>
+          <span class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-15 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(15 12 12)"/></svg>
+            Afrobeats & RnB
+          </span>
+          <span class="section-see-all" onclick="Search.quick('afrobeats')">Voir tout</span>
         </div>
         <div class="loading-state"><div class="spinner"></div></div>
       </div>
 
       <div id="home-rap" class="section-block">
         <div class="section-header">
-          <span class="section-title">🎤 Rap & Hip-Hop</span>
-          <span class="section-see-all" onclick="Search.quick('hip hop rap')">Voir tout</span>
+          <span class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            Rap & Hip-Hop
+          </span>
+          <span class="section-see-all" onclick="Search.quick('hip hop')">Voir tout</span>
         </div>
         <div class="loading-state"><div class="spinner"></div></div>
       </div>
@@ -94,9 +119,9 @@ const Views = {
     return `<div class="genres-grid">${
       GENRES.map(g => `
         <div class="genre-card" style="background:linear-gradient(135deg, ${g.color}dd, ${g.color}55)"
-             onclick="Search.quick('${g.id}')">
+             onclick="Search.quick('${g.name}')">
           <span class="genre-card-name">${g.name}</span>
-          <span class="genre-emoji">${g.emoji}</span>
+          <span class="genre-icon">${g.icon}</span>
         </div>
       `).join('')
     }</div>`;
@@ -413,7 +438,7 @@ const Views = {
         <div class="empty-state">
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
           <h3>Aucun titre aimé</h3>
-          <p>Clique sur le ❤️ sur n'importe quel titre pour l'ajouter ici</p>
+          <p>Clique sur le cœur sur n'importe quel titre pour l'ajouter ici</p>
         </div>
       `}
     `;
@@ -511,7 +536,10 @@ const Views = {
             }
           </div>
           <div class="view-meta">
-            <div class="view-type">Artiste vérifié ✓</div>
+            <div class="view-type">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right:4px;color:var(--purple-400)"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              Artiste vérifié
+            </div>
             <div class="view-title">${UI.escape(artistName)}</div>
             <div class="view-stats">
               <strong>${(monthlyCount).toLocaleString('fr')}</strong> auditeurs mensuels
@@ -525,7 +553,7 @@ const Views = {
           </button>
           <button class="btn-outline ${isFollowing ? 'following' : ''}" id="follow-btn"
                   onclick="Views._toggleFollow(${id}, '${UI.escape(artistName)}', '${artworkUrl}')">
-            ${isFollowing ? 'Suivi ✓' : 'Suivre'}
+            ${isFollowing ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg> Suivi' : 'Suivre'}
           </button>
         </div>
 
@@ -572,7 +600,7 @@ const Views = {
     const following = Store.toggleFollow(artist);
     const btn = document.getElementById('follow-btn');
     if (btn) {
-      btn.textContent = following ? 'Suivi ✓' : 'Suivre';
+      btn.innerHTML = following ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg> Suivi' : 'Suivre';
       btn.classList.toggle('following', following);
     }
     UI.toast(following ? `Tu suis ${artistName}` : `Tu ne suis plus ${artistName}`, following ? 'success' : 'info');
@@ -744,7 +772,7 @@ const Views = {
         <div class="settings-row">
           <div>
             <div class="settings-label">Qualité audio</div>
-            <div class="settings-desc">Aperçu 30s (iTunes API)</div>
+            <div class="settings-desc">Titres complets via Jamendo (Creative Commons)</div>
           </div>
           <span style="color:var(--purple-400);font-size:13px;font-weight:600">Standard</span>
         </div>
@@ -772,14 +800,14 @@ const Views = {
         <div class="settings-card-header">À propos</div>
         <div class="settings-row">
           <div>
-            <div class="settings-label">VIBE</div>
+            <div class="settings-label">NexSon</div>
             <div class="settings-desc">Version ${CONFIG.VERSION}</div>
           </div>
         </div>
         <div class="settings-row">
           <div>
             <div class="settings-label">Musique fournie par</div>
-            <div class="settings-desc">iTunes Search API, Lyrics.ovh</div>
+            <div class="settings-desc">Jamendo (titres complets), Lyrics.ovh</div>
           </div>
         </div>
       </div>
@@ -820,7 +848,7 @@ const Views = {
     const dur = API.formatDuration(track.duration);
     const liked = Store.isLiked(track.trackId);
     return `
-      <div class="card" ondblclick="Player.playTrack(${JSON.stringify(track).replace(/"/g, '&quot;')}, ${JSON.stringify(queue).replace(/"/g, '&quot;')}, ${idx})">
+      <div class="card" onclick="Player.playTrack(${JSON.stringify(track).replace(/"/g, '&quot;')}, ${JSON.stringify(queue).replace(/"/g, '&quot;')}, ${idx})" style="cursor:pointer">
         <div class="card-cover">
           ${track.artworkUrl
             ? `<img src="${track.artworkUrl}" alt="${UI.escape(track.trackName)}" loading="lazy">`
@@ -842,7 +870,7 @@ const Views = {
     const curr  = Player.currentTrack()?.trackId === track.trackId;
     return `
       <div class="track-item ${curr ? 'playing' : ''}" id="ti-${track.trackId}"
-           ondblclick="Player.playTrack(${JSON.stringify(track).replace(/"/g, '&quot;')}, ${JSON.stringify(queue).replace(/"/g, '&quot;')}, ${idx})"
+           onclick="Player.playTrack(${JSON.stringify(track).replace(/"/g, '&quot;')}, ${JSON.stringify(queue).replace(/"/g, '&quot;')}, ${idx})"
            oncontextmenu="UI.showContextMenu(event, ${JSON.stringify(track).replace(/"/g, '&quot;')}, ${JSON.stringify(queue).replace(/"/g, '&quot;')}, ${idx}, '${playlistId||''}')">
         <div class="track-num">
           <span class="track-num-text">${curr ? '' : idx + 1}</span>

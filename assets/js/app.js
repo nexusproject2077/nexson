@@ -1,5 +1,5 @@
 /* ============================================
-   VIBE – Main Application Entry Point
+   NexSon – Main Application Entry Point
    ============================================ */
 
 /* ── Close menus on outside click ── */
@@ -24,6 +24,17 @@ document.addEventListener('click', (e) => {
       sidebar.classList.remove('open');
     }
   }
+
+  // Close mobile search if clicking outside
+  if (window.innerWidth <= 640 && Search._mobileSearchOpen) {
+    const searchWrap = document.getElementById('topbar-search-wrap');
+    const mobileBtn  = document.getElementById('mobile-search-btn');
+    if (searchWrap && !searchWrap.contains(e.target) && !mobileBtn?.contains(e.target)) {
+      Search._mobileSearchOpen = false;
+      searchWrap.classList.remove('mobile-open');
+      mobileBtn?.classList.remove('active');
+    }
+  }
 });
 
 /* ── Close modals on overlay click ── */
@@ -40,6 +51,8 @@ document.addEventListener('keydown', (e) => {
     UI.closeContextMenu();
     const userDropdown = document.getElementById('user-dropdown');
     if (userDropdown) userDropdown.classList.add('hidden');
+    // Close mobile search
+    if (Search._mobileSearchOpen) Search.toggleMobileSearch();
   }
 });
 
@@ -68,29 +81,38 @@ document.addEventListener('contextmenu', (e) => {
 });
 
 /* ── Initialize Application ── */
-function init() {
+async function init() {
   // Init player
   Player.init();
 
-  // Check auth session
-  if (Auth.checkSession()) {
-    // Already logged in — render home
+  // Check auth session (async — handles JWT token too)
+  const isLoggedIn = await Auth.checkSession();
+  if (isLoggedIn) {
     Router.navigate('home');
     UI.renderSidebarPlaylists();
   }
   // else: auth screen is shown by default
 
-  // Focus search on Ctrl+K / Cmd+K
+  // Ctrl+K / Cmd+K → focus search
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       Router.navigate('search');
-      setTimeout(() => document.getElementById('main-search')?.focus(), 100);
+      setTimeout(() => {
+        const input = document.getElementById('main-search');
+        if (input) {
+          if (window.innerWidth <= 640) Search.toggleMobileSearch();
+          else input.focus();
+        }
+      }, 100);
     }
   });
 
-  console.log(`%c VIBE v${CONFIG.VERSION} `, 'background:linear-gradient(135deg,#8b5cf6,#ec4899);color:white;padding:4px 12px;border-radius:4px;font-weight:bold');
-  console.log('%cMusic Streaming Platform – Built with ❤️', 'color:#8b5cf6');
+  console.log(
+    `%c NexSon v${CONFIG.VERSION} `,
+    'background:linear-gradient(135deg,#8b5cf6,#ec4899);color:white;padding:4px 16px;border-radius:20px;font-weight:bold;font-size:13px'
+  );
+  console.log('%cPremium Music Streaming — Jamendo full tracks', 'color:#8b5cf6;font-size:12px');
 }
 
 window.addEventListener('DOMContentLoaded', init);
