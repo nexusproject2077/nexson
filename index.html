@@ -115,6 +115,9 @@
 <!-- ═══════════════════════════════════════════════ MAIN APP ═══ -->
 <div id="app" class="app hidden">
 
+  <!-- Sidebar overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="UI.toggleSidebar()"></div>
+
   <!-- ─── SIDEBAR ─── -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-top">
@@ -177,6 +180,9 @@
     <!-- Top Bar -->
     <header class="topbar" id="topbar">
       <div class="topbar-left">
+        <button class="btn-icon topbar-menu-btn" id="topbar-menu-btn" onclick="UI.toggleSidebar()" title="Menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
         <button class="btn-icon nav-back" id="btn-back" onclick="Router.back()" title="Retour">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
         </button>

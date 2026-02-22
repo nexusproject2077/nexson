@@ -178,7 +178,10 @@ const UI = {
   /* ── Sidebar toggle (mobile) ── */
   toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    if (sidebar) sidebar.classList.toggle('open');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!sidebar) return;
+    const isOpen = sidebar.classList.toggle('open');
+    if (overlay) overlay.classList.toggle('active', isOpen);
   },
 
   /* ── Queue panel ── */

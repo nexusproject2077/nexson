@@ -35,26 +35,48 @@ const API = {
     };
   },
 
-  /* ── Fetch a Jamendo API URL through CORS proxies (tries several in order) ── */
-  async _fetchJamendo(jamendoUrl) {
-    // Each proxy is tried in order; first successful JSON response wins.
-    const encoded = encodeURIComponent(jamendoUrl);
-    const proxies = [
-      `https://corsproxy.io/?url=${encoded}`,
-      `https://api.allorigins.win/raw?url=${encoded}`,
-      `https://corsproxy.io/?${encoded}`,           // fallback: old-style corsproxy format
-    ];
+  /* ── Fetch via JSONP — injects a <script> tag, bypasses CORS entirely ── */
+  _fetchJSONP(jamendoUrl) {
+    return new Promise((resolve, reject) => {
+      const id = '_nx_' + Date.now() + '_' + (Math.random() * 1e5 | 0);
+      // Replace format=json with format=jsonp + callback param
+      const url = jamendoUrl.replace('format=json', `format=jsonp&jsonp=${id}`);
+      const script = document.createElement('script');
+      script.id = id; script.src = url;
+      const timer = setTimeout(() => { cleanup(); reject(new Error('JSONP timeout')); }, 8000);
+      const cleanup = () => {
+        clearTimeout(timer);
+        delete window[id];
+        if (script.parentNode) script.remove();
+      };
+      window[id] = data => { cleanup(); resolve(data); };
+      script.onerror = () => { cleanup(); reject(new Error('JSONP script error')); };
+      document.head.appendChild(script);
+    });
+  },
 
-    for (const proxyUrl of proxies) {
+  /* ── Fetch Jamendo API — tries JSONP first, then CORS proxies as fallback ── */
+  async _fetchJamendo(jamendoUrl) {
+    // Strategy 1: JSONP — no proxy needed, works from any origin (Jamendo v3 supports it)
+    try {
+      const data = await this._fetchJSONP(jamendoUrl);
+      if (data?.results) return data;
+    } catch (_) { /* fall through to proxy */ }
+
+    // Strategy 2: CORS proxies — tried in order
+    const enc = encodeURIComponent(jamendoUrl);
+    for (const proxy of [
+      `https://corsproxy.io/?url=${enc}`,
+      `https://api.allorigins.win/raw?url=${enc}`,
+    ]) {
       try {
-        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!resp.ok) continue;
-        const data = await resp.json();
-        // Jamendo always returns a "results" array — use as validity check
-        if (data && Array.isArray(data.results)) return data;
-      } catch (_) { /* try next proxy */ }
+        const r = await fetch(proxy);
+        if (!r.ok) continue;
+        const d = await r.json();
+        if (d?.results) return d;
+      } catch (_) { /* try next */ }
     }
-    throw new Error('Tous les proxies CORS ont échoué pour Jamendo');
+    throw new Error('Jamendo inaccessible — JSONP et proxies ont échoué');
   },
 
   /* ── Jamendo: search tracks ── */

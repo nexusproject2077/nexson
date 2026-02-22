@@ -1411,7 +1411,23 @@ img { display: block; max-width: 100%; }
 /* Mobile search button — hidden on desktop */
 .mobile-search-btn { display: none !important; }
 
-/* Mobile sidebar toggle */
+/* Topbar hamburger — hidden on desktop */
+.topbar-menu-btn { display: none !important; }
+
+/* Mobile sidebar overlay backdrop */
+.sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 190;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--trans-med);
+}
+.sidebar-overlay.active {
+  opacity: 1; pointer-events: auto;
+}
+
+/* Mobile sidebar toggle (floating — kept as secondary access) */
 .sidebar-toggle {
   display: none;
   position: fixed; bottom: calc(var(--player-h) + 16px); left: 16px;
@@ -1421,104 +1437,199 @@ img { display: block; max-width: 100%; }
   z-index: 150; box-shadow: var(--shadow-md);
 }
 
+/* Player bar — needs relative context for mobile progress strip */
+.player-bar { position: relative; }
+
 /* ══════════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════════ */
+
+/* ─── 1100px : masquer la colonne album ─── */
 @media (max-width: 1100px) {
   .view-title { font-size: 36px; }
   .view-cover { width: 180px; height: 180px; }
   .track-album { display: none; }
   .track-list-header { grid-template-columns: 40px 1fr auto auto; }
-  .track-item { grid-template-columns: 40px 1fr auto auto; }
+  .track-item        { grid-template-columns: 40px 1fr auto auto; }
+  .search-grid       { grid-template-columns: 1fr; gap: 24px; }
 }
 
+/* ─── 900px : masquer la sidebar, la rendre un drawer ─── */
 @media (max-width: 900px) {
   :root { --sidebar-w: 0px; }
   .sidebar {
-    position: fixed; left: -240px; top: 0;
-    width: 240px; transform: translateX(0);
-    height: calc(100vh - var(--player-h));
+    position: fixed; left: -260px; top: 0;
+    width: 260px; height: calc(100vh - var(--player-h));
     z-index: 200; transition: left var(--trans-med);
   }
   .sidebar.open { left: 0; }
-  .sidebar-toggle { display: flex; }
-  .app { grid-template-columns: 1fr; }
-  .content-wrapper { grid-column: 1; }
-  .page-content { padding: 20px; }
-  .topbar { padding: 0 16px; }
-  .view-title { font-size: 28px; }
-  .view-header { flex-direction: column; }
-  .view-cover { width: 160px; height: 160px; }
+  .sidebar-overlay { display: block; }
+  .topbar-menu-btn  { display: flex !important; }
+  .sidebar-toggle   { display: none; } /* remplacé par hamburger topbar */
+  .app              { grid-template-columns: 1fr; }
+  .content-wrapper  { grid-column: 1; }
+  .page-content     { padding: 20px; }
+  .topbar           { padding: 0 12px; gap: 8px; }
+  .topbar-search-wrap { max-width: 340px; }
+  .view-title  { font-size: 28px; }
+  .view-header { flex-direction: column; align-items: flex-start; gap: 20px; }
+  .view-cover  { width: 160px; height: 160px; }
+  .profile-hero    { flex-direction: column; align-items: center; padding: 32px 24px; text-align: center; }
+  .profile-stats   { justify-content: center; gap: 20px; }
+  .profile-name    { font-size: 36px; }
+  /* Side panels full-width on tablet */
+  .side-panel { width: min(320px, 100vw); }
 }
 
-@media (max-width: 640px) {
-  .player-bar { grid-template-columns: 1fr auto; padding: 0 12px; gap: 8px; }
-  .player-extra { display: none; }
-  .player-controls { flex: 1; }
-  .cards-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-  .auth-card { padding: 28px 24px; }
-  .hero-banner { padding: 24px; }
-  .hero-title { font-size: 22px; }
-  .hero-img { display: none; }
+/* ─── 768px : tablette ─── */
+@media (max-width: 768px) {
+  .hero-banner  { padding: 28px; min-height: 150px; }
+  .hero-title   { font-size: 24px; }
+  .hero-content { max-width: 70%; }
+  .home-greeting h1 { font-size: 28px; }
+  .cards-grid   { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .view-title   { font-size: 24px; }
+  .view-cover   { width: 140px; height: 140px; }
+  /* Side panels: slide from bottom on mobile */
+  .side-panel {
+    width: 100%; right: auto;
+    bottom: calc(var(--player-h)); left: 0;
+    height: 70vh;
+    transform: translateY(100%);
+    transition: transform var(--trans-med);
+    border-left: none; border-top: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+  .side-panel.open { transform: translateY(0); right: auto; }
+}
 
-  /* Mobile search: hidden by default, shown when toggled */
+/* ─── 640px : mobile ─── */
+@media (max-width: 640px) {
+  /* — Layout — */
+  .page-content { padding: 16px; }
+  .topbar       { padding: 0 10px; gap: 6px; }
+  .nav-back, .nav-fwd { display: none; } /* replaced by gestures / topbar back logic */
+
+  /* — Mobile search bar — */
   .topbar-search-wrap {
     position: fixed; top: var(--topbar-h); left: 0; right: 0;
-    padding: 8px 16px; background: var(--bg-surface);
+    padding: 8px 14px; background: var(--bg-surface);
     border-bottom: 1px solid var(--border-subtle);
     z-index: 99; transform: translateY(-110%);
-    transition: transform 0.2s var(--ease-smooth);
+    transition: transform 0.25s var(--ease-smooth);
     max-width: 100%;
   }
-  .topbar-search-wrap.mobile-open {
-    transform: translateY(0);
-  }
+  .topbar-search-wrap.mobile-open { transform: translateY(0); }
   .topbar-search { border-radius: var(--radius-full); }
   .mobile-search-btn { display: flex !important; }
 
-  /* Player bar mobile — compact */
+  /* — Auth — */
+  .auth-card     { padding: 28px 20px; }
+  .auth-title    { font-size: 24px; }
+  .auth-features { gap: 10px; flex-direction: column; align-items: center; }
+  .feature-item  { font-size: 12px; padding: 7px 14px; }
+
+  /* — Hero — */
+  .hero-banner    { padding: 20px; min-height: 130px; }
+  .hero-title     { font-size: 20px; }
+  .hero-img       { display: none; }
+  .hero-content   { max-width: 100%; }
+  .home-greeting h1 { font-size: 24px; }
+  .home-greeting    { margin-bottom: 24px; }
+
+  /* — Cards — */
+  .cards-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+
+  /* — Section headers — */
+  .section-title    { font-size: 18px; }
+  .section-block    { margin-bottom: 36px; }
+
+  /* — Genres — */
+  .genres-grid    { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .genre-card     { padding: 12px; }
+  .genre-card-name { font-size: 13px; }
+
+  /* — Track list — */
+  .track-album { display: none; }
+  .track-item        { grid-template-columns: 36px 1fr auto auto; padding: 6px 10px; }
+  .track-list-header { grid-template-columns: 36px 1fr auto auto; padding: 0 10px 8px; }
+  .track-cover { width: 34px; height: 34px; }
+
+  /* — Quick access — */
+  .quick-access { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+  /* — View header — */
+  .view-type  { font-size: 10px; }
+  .view-title { font-size: 22px; }
+  .view-cover { width: 120px; height: 120px; }
+  .view-actions { gap: 10px; flex-wrap: wrap; }
+  .btn-play-large { width: 48px; height: 48px; }
+
+  /* — Profile — */
+  .profile-avatar { width: 100px; height: 100px; font-size: 36px; }
+  .profile-name   { font-size: 28px; }
+  .profile-hero   { padding: 24px 16px; }
+
+  /* — Settings — */
+  .settings-row  { padding: 14px 18px; }
+  .settings-card-header { padding: 16px 18px; }
+
+  /* — Sidebar — */
+  .user-info { display: none; }
+  .user-menu { gap: 6px; }
+
+  /* — Player bar (mobile) —
+     Show a thin progress strip at the very top of the bar.
+     Controls: cover + name | prev · play · next                        */
   .player-bar {
-    --player-h: 72px;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 1fr auto;
+    padding: 4px 12px 8px;
+    gap: 6px;
+    min-height: 68px;
   }
-  .player-track { min-width: 0; }
-  .player-track-name { font-size: 13px; }
+  .player-extra  { display: none; }
+  .player-track  { min-width: 0; }
+  .player-track-name   { font-size: 13px; }
   .player-track-artist { font-size: 11px; }
-  .player-controls { min-width: 0; }
-  .player-progress { display: none; }
+  .player-controls {
+    justify-content: center; gap: 2px;
+  }
+  /* Hide shuffle and repeat on mobile — too cluttered */
+  #shuffle-btn, #repeat-btn { display: none; }
   .player-btn-play { width: 40px; height: 40px; }
 
-  /* Sections responsive */
-  .section-title { font-size: 18px; }
-  .genres-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
-  .genre-card { padding: 12px; }
-  .genre-card-name { font-size: 14px; }
+  /* Progress bar: thin strip at the very top of the player bar */
+  .player-progress {
+    display: flex;
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 3px; padding: 0; gap: 0;
+    align-items: stretch;
+  }
+  .player-time { display: none; }
+  .progress-bar {
+    flex: 1; height: 3px; border-radius: 0;
+    transition: none;
+  }
+  .progress-bar:hover { height: 3px; } /* no grow on touch */
+  .progress-thumb { display: none; }
 
-  /* Track list mobile */
-  .track-album, .track-list-header span:nth-child(3) { display: none; }
-  .track-item { grid-template-columns: 36px 1fr auto auto; }
-  .track-list-header { grid-template-columns: 36px 1fr auto auto; }
-
-  /* Quick access */
-  .quick-access { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
-
-  /* View header */
-  .view-title { font-size: 24px; }
-  .view-cover { width: 140px; height: 140px; }
-
-  /* Sidebar bottom */
-  .user-info { display: none; }
-  .user-menu { gap: 8px; }
-
-  /* Auth */
-  .auth-features { gap: 12px; }
-  .feature-item { font-size: 12px; padding: 8px 14px; }
+  /* Side panels: full-screen sheet on mobile */
+  .side-panel {
+    bottom: var(--player-h); left: 0; right: 0;
+    width: 100%; height: 65vh;
+    transform: translateY(100%); border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-left: none; border-top: 1px solid var(--border-subtle);
+  }
+  .side-panel.open { transform: translateY(0); right: 0; }
 }
 
-/* Extra small screens */
+/* ─── 380px : très petits écrans ─── */
 @media (max-width: 380px) {
-  .auth-card { padding: 24px 18px; }
-  .auth-title { font-size: 24px; }
-  .cards-grid { grid-template-columns: repeat(2, 1fr); }
-  .genres-grid { grid-template-columns: repeat(2, 1fr); }
+  .auth-card   { padding: 20px 16px; }
+  .auth-title  { font-size: 22px; }
+  .cards-grid  { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .genres-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .quick-access { grid-template-columns: 1fr; }
+  .player-cover { width: 42px; height: 42px; }
+  .home-greeting h1 { font-size: 20px; }
 }
