@@ -289,7 +289,14 @@ const Player = {
     const coverEl  = document.getElementById('player-cover');
     const likeBtn  = document.getElementById('player-like-btn');
 
-    if (nameEl)   nameEl.textContent   = track.trackName;
+    if (nameEl) {
+      // Show "30s" badge for iTunes preview tracks
+      const badge = track.source === 'itunes'
+        ? '<span style="font-size:10px;background:rgba(255,255,255,.15);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle;">30s</span>'
+        : '';
+      const safeName = track.trackName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      nameEl.innerHTML = safeName + badge;
+    }
     if (artistEl) {
       artistEl.textContent = track.artistName;
       artistEl.onclick = () => Router.navigate('artist', { id: track.artistId, name: track.artistName });

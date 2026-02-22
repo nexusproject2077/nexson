@@ -43,7 +43,7 @@ const API = {
       const url = jamendoUrl.replace('format=json', `format=jsonp&jsonp=${id}`);
       const script = document.createElement('script');
       script.id = id; script.src = url;
-      const timer = setTimeout(() => { cleanup(); reject(new Error('JSONP timeout')); }, 8000);
+      const timer = setTimeout(() => { cleanup(); reject(new Error('JSONP timeout')); }, 3000);
       const cleanup = () => {
         clearTimeout(timer);
         delete window[id];
@@ -79,11 +79,12 @@ const API = {
     throw new Error('Jamendo inaccessible — JSONP et proxies ont échoué');
   },
 
-  /* ── Jamendo: search tracks ── */
+  /* ── Jamendo: search tracks (iTunes fallback guaranteed) ── */
   async search(term, limit = 25) {
     const cacheKey = `jsearch_${term}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
 
+    // --- Jamendo first (full tracks) ---
     try {
       const jamendoUrl = `${CONFIG.JAMENDO_API}/tracks/?` +
         `client_id=${CONFIG.JAMENDO_KEY}&format=json` +
@@ -92,13 +93,20 @@ const API = {
 
       const data = await this._fetchJamendo(jamendoUrl);
       const results = (data.results || []).map(t => this._normalizeJamendo(t));
-      console.info(`[NexSon] Jamendo: ${results.length} titres pour "${term}"`);
-      this._cache[cacheKey] = results;
-      return results;
+      if (results.length > 0) {
+        console.info(`[NexSon] Jamendo: ${results.length} titres pour "${term}"`);
+        this._cache[cacheKey] = results;
+        return results;
+      }
     } catch (e) {
-      console.error('[NexSon] Jamendo search error:', e.message);
-      return [];
+      console.warn(`[NexSon] Jamendo indisponible (${e.message}) — bascule iTunes`);
     }
+
+    // --- iTunes fallback (always works, 30s previews) ---
+    const itunes = await this._iTunesFallback(term, limit);
+    console.info(`[NexSon] iTunes: ${itunes.length} titres pour "${term}"`);
+    if (itunes.length > 0) this._cache[cacheKey] = itunes;
+    return itunes;
   },
 
   /* ── Jamendo: search by tag/genre ── */
