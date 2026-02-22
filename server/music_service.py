@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 NexSon – Music Service
-Search via ytmusicapi + Audio stream proxy via yt-dlp
+Search + Stream proxy via yt-dlp uniquement (plus de dépendance ytmusicapi)
 
 Endpoints:
   GET /health
   GET /search?q=<term>&limit=25
-  GET /stream?id=<videoId>        ← audio proxy (supports Range / seeking)
+  GET /stream?id=<videoId>   ← proxy audio avec support Range (seeking OK)
 """
 
 import time
@@ -15,24 +15,20 @@ import traceback
 
 from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
-from ytmusicapi import YTMusic
 import yt_dlp
 import requests as req_lib
 
 app = Flask(__name__)
 CORS(app)
 
-# ── YouTube Music client (no auth needed for search) ─────────────────────────
-yt = YTMusic()
-
-# ── yt-dlp URL cache (stream URLs expire ~6h on YouTube) ─────────────────────
+# ── Cache des URLs yt-dlp (expirent ~6h sur YouTube) ─────────────────────────
 _url_cache: dict = {}
 _cache_lock = threading.Lock()
 CACHE_TTL = 3600  # 1 h
 
 
-def _resolve_yt_url(video_id: str) -> str:
-    """Return the direct audio stream URL for a YouTube video ID (cached)."""
+def _resolve_stream_url(video_id: str) -> str:
+    """Retourne l'URL directe du flux audio (avec cache 1h)."""
     now = time.time()
     with _cache_lock:
         entry = _url_cache.get(video_id)
@@ -79,35 +75,47 @@ def search():
         return jsonify([])
 
     try:
-        results = yt.search(q, filter='songs', limit=limit)
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,   # métadonnées seulement, pas de stream
+            'ignoreerrors': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f'ytsearch{limit}:{q}', download=False)
+
+        entries = (info or {}).get('entries', [])
         tracks  = []
-        for t in results[:limit]:
-            vid = t.get('videoId')
+
+        for e in entries:
+            if not e:
+                continue
+            vid = e.get('id') or e.get('videoId')
             if not vid:
                 continue
-            artists = t.get('artists') or []
-            artist  = ', '.join(a['name'] for a in artists) if artists else 'Inconnu'
-            album   = (t.get('album') or {}).get('name', '')
-            thumbs  = t.get('thumbnails') or []
-            art_big = thumbs[-1]['url'] if thumbs else ''
-            art_sm  = thumbs[0]['url']  if thumbs else art_big
+
+            # Thumbnails YouTube standard (pas besoin de les résoudre)
+            art_big = f'https://i.ytimg.com/vi/{vid}/hqdefault.jpg'
+            art_sm  = f'https://i.ytimg.com/vi/{vid}/default.jpg'
+
             tracks.append({
                 'trackId':        f'yt_{vid}',
-                'trackName':      t.get('title', 'Inconnu'),
-                'artistName':     artist,
-                'collectionName': album,
+                'trackName':      e.get('title', 'Inconnu'),
+                'artistName':     e.get('uploader') or e.get('channel') or 'Artiste inconnu',
+                'collectionName': '',
                 'collectionId':   '',
                 'artworkUrl':     art_big,
                 'artworkSmall':   art_sm,
-                'ytVideoId':      vid,       # used by frontend to build stream URL
-                'duration':       t.get('duration_seconds', 0),
+                'ytVideoId':      vid,
+                'duration':       int(e.get('duration') or 0),
                 'genre':          '',
                 'releaseDate':    '',
                 'trackNumber':    1,
                 'artistId':       '',
                 'source':         'youtube',
-                'explicit':       bool(t.get('isExplicit', False)),
+                'explicit':       False,
             })
+
         return jsonify(tracks)
 
     except Exception as e:
@@ -118,19 +126,18 @@ def search():
 @app.route('/stream')
 def stream():
     """
-    Proxy the audio stream for a YouTube video ID.
-    Supports Range requests so seeking works in the browser <audio> element.
+    Proxy du flux audio YouTube.
+    Supporte les Range requests → seeking dans le navigateur.
     """
     video_id = request.args.get('id', '').strip()
     if not video_id:
-        return jsonify({'error': 'Missing id parameter'}), 400
+        return jsonify({'error': 'Paramètre id manquant'}), 400
 
     try:
-        yt_url = _resolve_yt_url(video_id)
+        yt_url = _resolve_stream_url(video_id)
         if not yt_url:
-            return jsonify({'error': 'Could not resolve stream URL'}), 404
+            return jsonify({'error': 'Impossible de résoudre le flux'}), 404
 
-        # Forward Range header from browser (enables seeking)
         fwd_headers = {
             'User-Agent': (
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -169,4 +176,6 @@ def stream():
 
 
 if __name__ == '__main__':
+    print('NexSon Music Service démarré sur http://localhost:5000')
+    print('Endpoints : /health  /search?q=...  /stream?id=...')
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

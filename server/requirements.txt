@@ -1,5 +1,4 @@
 flask>=3.0.0
 flask-cors>=4.0.0
-ytmusicapi>=1.7.0
 yt-dlp>=2024.1.0
 requests>=2.31.0
