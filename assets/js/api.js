@@ -55,34 +55,38 @@ const API = {
     return stream;
   },
 
-  /* ── x007: search across all engines until one returns results ── */
+  /* ── x007: tous les engines en parallèle, combine et déduplique ── */
   async _searchX007(term, limit = 25) {
     const engines = ['gaama', 'seevn', 'hunjama', 'mtmusic', 'wunk'];
-    for (const engine of engines) {
-      try {
-        const url = `https://musicapi.x007.workers.dev/search` +
-          `?q=${encodeURIComponent(term)}&searchEngine=${engine}`;
-        const resp = await fetch(url);
-        if (!resp.ok) continue;
-        const raw = await resp.json();
 
-        // Response can be an array or { results/data/songs/tracks: [] }
-        const items = Array.isArray(raw)
-          ? raw
-          : (raw.results || raw.data || raw.songs || raw.tracks || raw.items || []);
+    const settled = await Promise.allSettled(engines.map(async engine => {
+      const url = `https://musicapi.x007.workers.dev/search` +
+        `?q=${encodeURIComponent(term)}&searchEngine=${engine}`;
+      const resp = await fetch(url);
+      if (!resp.ok) return [];
+      const raw = await resp.json();
+      const items = Array.isArray(raw)
+        ? raw
+        : (raw.results || raw.data || raw.songs || raw.tracks || raw.items || []);
+      const tracks = items
+        .map(t => this._normalizeX007(t, engine))
+        .filter(t => t.previewUrl || t.x007Id);
+      if (tracks.length) console.info(`[NexSon] x007/${engine}: ${tracks.length} titres`);
+      return tracks;
+    }));
 
-        const results = items
-          .slice(0, limit)
-          .map(t => this._normalizeX007(t, engine))
-          .filter(t => t.previewUrl || t.x007Id);  // URL directe OU ID à résoudre
+    // Fusion + déduplication titre|artiste
+    const seen = new Set();
+    const all = settled
+      .filter(r => r.status === 'fulfilled')
+      .flatMap(r => r.value)
+      .filter(t => {
+        const key = `${t.trackName.toLowerCase()}|${t.artistName.toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      });
 
-        if (results.length > 0) {
-          console.info(`[NexSon] x007/${engine}: ${results.length} titres pour "${term}"`);
-          return results;
-        }
-      } catch (_) { /* engine failed, try next */ }
-    }
-    return [];
+    return all.slice(0, limit);
   },
 
   /* ══════════════════════════════════════════
@@ -158,12 +162,12 @@ const API = {
     throw new Error('Jamendo inaccessible — JSONP et proxies ont échoué');
   },
 
-  /* ── Main search — x007 → Jamendo → iTunes (toujours des résultats) ── */
+  /* ── Main search — x007 → Jamendo (jamais iTunes, jamais de preview 30s) ── */
   async search(term, limit = 25) {
     const cacheKey = `jsearch_${term}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
 
-    // 1) x007 Workers API — titres complets, multi-engine
+    // 1) x007 Workers API — titres complets, tous engines en parallèle
     try {
       const x007 = await this._searchX007(term, limit);
       if (x007.length > 0) {
@@ -189,11 +193,9 @@ const API = {
       console.warn(`[NexSon] Jamendo indisponible (${e.message})`);
     }
 
-    // 3) iTunes — filet de sécurité (30s previews)
-    const itunes = await this._iTunesFallback(term, limit);
-    console.info(`[NexSon] iTunes fallback: ${itunes.length} titres pour "${term}"`);
-    if (itunes.length > 0) this._cache[cacheKey] = itunes;
-    return itunes;
+    // iTunes retiré — aucun preview 30s dans NexSon
+    console.warn(`[NexSon] Aucun résultat pour "${term}" (x007 + Jamendo épuisés)`);
+    return [];
   },
 
   /* ── Jamendo: search by tag/genre ── */
