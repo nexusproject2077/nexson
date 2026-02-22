@@ -1,10 +1,89 @@
 /* ============================================
    NexSon – API Module
-   Jamendo (full tracks) + iTunes (metadata fallback)
+   x007 Workers API (full tracks) → Jamendo → iTunes (30s fallback)
    ============================================ */
 
 const API = {
   _cache: {},
+
+  /* ══════════════════════════════════════════
+     x007 WORKERS API — Full Track Streams
+     https://musicapi.x007.workers.dev/search
+  ══════════════════════════════════════════ */
+
+  /* ── Normalize x007 response → internal format ── */
+  _normalizeX007(t, engine) {
+    // Handle the various field names different engines return
+    const audio   = t.url        || t.audio    || t.stream   || t.link
+                 || t.download   || t.mp3      || t.media    || '';
+    const artwork = t.thumbnail  || t.image    || t.cover    || t.artwork
+                 || t.poster     || t.img      || '';
+    const title   = t.title      || t.name     || t.song     || t.trackName || 'Inconnu';
+    const artist  = t.artist     || t.singer   || t.artistName
+                 || t.authors    || t.author   || 'Artiste inconnu';
+    const id      = t.id         || t.trackId  || t.song_id  || t.songId || '';
+
+    return {
+      trackId:        `x_${engine}_${id || Math.random().toString(36).slice(2)}`,
+      trackName:      title,
+      artistName:     artist,
+      collectionName: t.album || t.albumName || '',
+      collectionId:   '',
+      artworkUrl:     artwork,
+      artworkSmall:   artwork,
+      previewUrl:     audio,   // URL directe si disponible dans la réponse search
+      x007Id:         id,      // ID pour /fetch si pas d'URL directe
+      duration:       t.duration || t.length || 0,
+      genre:          t.genre || '',
+      releaseDate:    t.year || t.releaseDate || '',
+      trackNumber:    1,
+      artistId:       '',
+      source:         'x007',  // pas de badge 30s
+      explicit:       false,
+    };
+  },
+
+  /* ── x007: resolve stream URL from song ID (called on play) ── */
+  async resolveX007Stream(songId) {
+    const url = `https://musicapi.x007.workers.dev/fetch?id=${encodeURIComponent(songId)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`x007 fetch HTTP ${resp.status}`);
+    const data = await resp.json();
+    const stream = data.url || data.stream || data.audio || data.link
+                || data.mp3 || data.media || data.download || '';
+    if (!stream) throw new Error('x007 /fetch: aucune URL dans la réponse');
+    return stream;
+  },
+
+  /* ── x007: search across all engines until one returns results ── */
+  async _searchX007(term, limit = 25) {
+    const engines = ['gaama', 'seevn', 'hunjama', 'mtmusic', 'wunk'];
+    for (const engine of engines) {
+      try {
+        const url = `https://musicapi.x007.workers.dev/search` +
+          `?q=${encodeURIComponent(term)}&searchEngine=${engine}`;
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const raw = await resp.json();
+
+        // Response can be an array or { results/data/songs/tracks: [] }
+        const items = Array.isArray(raw)
+          ? raw
+          : (raw.results || raw.data || raw.songs || raw.tracks || raw.items || []);
+
+        const results = items
+          .slice(0, limit)
+          .map(t => this._normalizeX007(t, engine))
+          .filter(t => t.previewUrl || t.x007Id);  // URL directe OU ID à résoudre
+
+        if (results.length > 0) {
+          console.info(`[NexSon] x007/${engine}: ${results.length} titres pour "${term}"`);
+          return results;
+        }
+      } catch (_) { /* engine failed, try next */ }
+    }
+    return [];
+  },
 
   /* ══════════════════════════════════════════
      JAMENDO — Full Track Streams (Free Music)
@@ -79,18 +158,26 @@ const API = {
     throw new Error('Jamendo inaccessible — JSONP et proxies ont échoué');
   },
 
-  /* ── Jamendo: search tracks (iTunes fallback guaranteed) ── */
+  /* ── Main search — x007 → Jamendo → iTunes (toujours des résultats) ── */
   async search(term, limit = 25) {
     const cacheKey = `jsearch_${term}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
 
-    // --- Jamendo first (full tracks) ---
+    // 1) x007 Workers API — titres complets, multi-engine
+    try {
+      const x007 = await this._searchX007(term, limit);
+      if (x007.length > 0) {
+        this._cache[cacheKey] = x007;
+        return x007;
+      }
+    } catch (_) {}
+
+    // 2) Jamendo — titres complets CC (JSONP puis proxy)
     try {
       const jamendoUrl = `${CONFIG.JAMENDO_API}/tracks/?` +
         `client_id=${CONFIG.JAMENDO_KEY}&format=json` +
         `&search=${encodeURIComponent(term)}&limit=${limit}` +
         `&audioformat=mp32&include=musicinfo&order=popularity_total`;
-
       const data = await this._fetchJamendo(jamendoUrl);
       const results = (data.results || []).map(t => this._normalizeJamendo(t));
       if (results.length > 0) {
@@ -99,12 +186,12 @@ const API = {
         return results;
       }
     } catch (e) {
-      console.warn(`[NexSon] Jamendo indisponible (${e.message}) — bascule iTunes`);
+      console.warn(`[NexSon] Jamendo indisponible (${e.message})`);
     }
 
-    // --- iTunes fallback (always works, 30s previews) ---
+    // 3) iTunes — filet de sécurité (30s previews)
     const itunes = await this._iTunesFallback(term, limit);
-    console.info(`[NexSon] iTunes: ${itunes.length} titres pour "${term}"`);
+    console.info(`[NexSon] iTunes fallback: ${itunes.length} titres pour "${term}"`);
     if (itunes.length > 0) this._cache[cacheKey] = itunes;
     return itunes;
   },

@@ -51,7 +51,7 @@ const Player = {
   },
 
   /* ── Play a track ── */
-  playTrack(track, queue = null, idx = 0) {
+  async playTrack(track, queue = null, idx = 0) {
     if (!track) return;
     if (queue) {
       this.queue    = queue;
@@ -64,12 +64,30 @@ const Player = {
     }
     Store.setQueueIdx(this.queueIdx);
 
+    // ── Resolve x007 stream URL on demand (search returns ID, /fetch returns URL) ──
+    if (!track.previewUrl && track.x007Id) {
+      this._updatePlayerUI(track);   // show title/art while loading
+      UI.toast('Chargement…', 'info', 2000);
+      try {
+        const streamUrl = await API.resolveX007Stream(track.x007Id);
+        track.previewUrl = streamUrl;
+        // Cache resolved URL back into the queue so next play is instant
+        const qi = this.queue.findIndex(t => t.trackId === track.trackId);
+        if (qi >= 0) this.queue[qi].previewUrl = streamUrl;
+        Store.setQueue(this.queue);
+      } catch (e) {
+        console.error('[NexSon] x007 stream resolve failed:', e.message);
+        UI.toast('Impossible de charger ce titre — essaie le suivant', 'error');
+        return;
+      }
+    }
+
     if (!track.previewUrl) {
       UI.toast('Audio non disponible pour ce titre', 'error');
       return;
     }
 
-    console.info(`[NexSon] Lecture : ${track.trackName} | source: ${track.source || 'unknown'} | url: ${track.previewUrl}`);
+    console.info(`[NexSon] Lecture : ${track.trackName} | source: ${track.source} | url: ${track.previewUrl}`);
 
     this.audio.src = track.previewUrl;
     this.audio.load();
