@@ -1,6 +1,6 @@
 /* ============================================
    NexSon – API Module
-   YouTube Music (ytmusicapi proxy) → x007 → Jamendo
+   YouTube (Piped API) → Python proxy local → x007 → Jamendo
    Aucune preview 30s — titres complets uniquement
    ============================================ */
 
@@ -8,13 +8,90 @@ const API = {
   _cache: {},
 
   /* ══════════════════════════════════════════
-     YOUTUBE MUSIC — via microservice Python
-     server/music_service.py  (port 5000)
-     GET /search?q=term  →  liste de titres
-     GET /stream?id=vid  →  proxy audio (Range-ok)
+     PIPED API — YouTube Music sans backend
+     Fonctionne directement depuis le navigateur
+     (GitHub Pages, Netlify, partout)
+     Docs : https://docs.piped.video/docs/api-documentation/
   ══════════════════════════════════════════ */
 
-  /* ── Search YouTube Music via local proxy ── */
+  PIPED_INSTANCES: [
+    'https://pipedapi.kavin.rocks',
+    'https://piped-api.garudalinux.org',
+    'https://api.piped.projectsegfau.lt',
+    'https://pipedapi.in.projectsegfau.lt',
+  ],
+
+  /* ── Search via Piped (retourne pipedId pour résolution lazy) ── */
+  async _searchPiped(term, limit = 25) {
+    for (const base of this.PIPED_INSTANCES) {
+      try {
+        const url = `${base}/search?q=${encodeURIComponent(term)}&filter=music_songs`;
+        const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const items = data.items || [];
+
+        const tracks = items.slice(0, limit).map(t => {
+          const vid = (t.url || '').replace('/watch?v=', '').split('&')[0].trim();
+          if (!vid) return null;
+          return {
+            trackId:        `p_${vid}`,
+            trackName:      t.title || 'Inconnu',
+            artistName:     t.uploaderName || 'Artiste inconnu',
+            collectionName: '',
+            collectionId:   '',
+            artworkUrl:     t.thumbnail || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+            artworkSmall:   `https://i.ytimg.com/vi/${vid}/default.jpg`,
+            previewUrl:     '',      // résolu dans playTrack via resolvePipedStream
+            pipedId:        vid,
+            pipedBase:      base,
+            duration:       t.duration || 0,
+            genre:          '',
+            releaseDate:    '',
+            trackNumber:    1,
+            artistId:       '',
+            source:         'youtube',
+            explicit:       false,
+          };
+        }).filter(Boolean);
+
+        if (tracks.length > 0) {
+          console.info(`[NexSon] Piped (${base}): ${tracks.length} titres pour "${term}"`);
+          return tracks;
+        }
+      } catch (_) { /* instance KO, essai suivant */ }
+    }
+    return [];
+  },
+
+  /* ── Résoudre l'URL audio via Piped /streams (appelé au Play) ── */
+  async resolvePipedStream(videoId, preferredBase = '') {
+    const order = preferredBase
+      ? [preferredBase, ...this.PIPED_INSTANCES.filter(b => b !== preferredBase)]
+      : this.PIPED_INSTANCES;
+
+    for (const base of order) {
+      try {
+        const resp = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`,
+          { signal: AbortSignal.timeout(8000) });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const streams = data.audioStreams || [];
+        if (!streams.length) continue;
+        // Meilleure qualité audio (bitrate le plus élevé)
+        const best = streams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+        if (best?.url) return best.url;
+      } catch (_) {}
+    }
+    throw new Error('Piped: stream introuvable sur toutes les instances');
+  },
+
+  /* ══════════════════════════════════════════
+     YOUTUBE MUSIC — via microservice Python local
+     server/music_service.py  (port 5000)
+     Utilisé en dev/localhost uniquement
+  ══════════════════════════════════════════ */
+
   async _searchYouTube(term, limit = 25) {
     if (!CONFIG.MUSIC_API) return [];
     const url = `${CONFIG.MUSIC_API}/search?q=${encodeURIComponent(term)}&limit=${limit}`;
@@ -22,8 +99,6 @@ const API = {
     if (!resp.ok) throw new Error(`Music service HTTP ${resp.status}`);
     const tracks = await resp.json();
     if (!Array.isArray(tracks) || tracks.length === 0) return [];
-
-    // Inject the proxy stream URL as previewUrl — player needs no changes
     return tracks.map(t => ({
       ...t,
       previewUrl: t.ytVideoId ? `${CONFIG.MUSIC_API}/stream?id=${t.ytVideoId}` : '',
@@ -186,24 +261,30 @@ const API = {
     throw new Error('Jamendo inaccessible — JSONP et proxies ont échoué');
   },
 
-  /* ── Main search — YouTube Music → x007 → Jamendo (jamais de preview 30s) ── */
+  /* ── Main search — Piped → Python local → x007 → Jamendo (jamais de preview 30s) ── */
   async search(term, limit = 25) {
     const cacheKey = `jsearch_${term}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
 
-    // 1) YouTube Music — millions de titres complets via proxy local
+    // 1) Piped API — YouTube Music depuis le navigateur (GitHub Pages OK)
+    try {
+      const piped = await this._searchPiped(term, limit);
+      if (piped.length > 0) {
+        this._cache[cacheKey] = piped;
+        return piped;
+      }
+    } catch (_) {}
+
+    // 2) Python service local (localhost:5000, dev uniquement)
     try {
       const yt = await this._searchYouTube(term, limit);
       if (yt.length > 0) {
-        console.info(`[NexSon] YouTube Music: ${yt.length} titres pour "${term}"`);
         this._cache[cacheKey] = yt;
         return yt;
       }
-    } catch (e) {
-      console.warn(`[NexSon] Music service indisponible (${e.message}) — essai x007`);
-    }
+    } catch (_) {}
 
-    // 2) x007 Workers API — titres complets, tous engines en parallèle
+    // 3) x007 Workers API — titres complets, tous engines en parallèle
     try {
       const x007 = await this._searchX007(term, limit);
       if (x007.length > 0) {
