@@ -1,6 +1,6 @@
 /* ============================================
    NexSon – API Module
-   YouTube (Piped API) → Python proxy local → x007 → Jamendo
+   Invidious (YouTube) → Python proxy local → Jamendo
    Aucune preview 30s — titres complets uniquement
    ============================================ */
 
@@ -8,55 +8,53 @@ const API = {
   _cache: {},
 
   /* ══════════════════════════════════════════
-     PIPED API — YouTube Music sans backend
-     Fonctionne directement depuis le navigateur
-     (GitHub Pages, Netlify, partout)
-     Docs : https://docs.piped.video/docs/api-documentation/
+     INVIDIOUS API — YouTube sans backend
+     CORS activé par défaut sur toutes les instances
+     (contrairement à Piped qui a retiré CORS)
+     Docs : https://docs.invidious.io/api/
   ══════════════════════════════════════════ */
 
-  PIPED_INSTANCES: [
-    'https://pipedapi.kavin.rocks',
-    'https://piped-api.garudalinux.org',
-    'https://api.piped.projectsegfau.lt',
-    'https://pipedapi.in.projectsegfau.lt',
+  INVIDIOUS_INSTANCES: [
+    'https://yewtu.be',
+    'https://invidious.snopyta.org',
+    'https://inv.riverside.rocks',
+    'https://invidious.tiekoetter.com',
+    'https://yt.artemislena.eu',
   ],
 
-  /* ── Search via Piped (retourne pipedId pour résolution lazy) ── */
-  async _searchPiped(term, limit = 25) {
-    for (const base of this.PIPED_INSTANCES) {
+  /* ── Search via Invidious (retourne invidiousId pour résolution lazy) ── */
+  async _searchInvidious(term, limit = 25) {
+    const fields = 'videoId,title,author,lengthSeconds,videoThumbnails';
+    for (const base of this.INVIDIOUS_INSTANCES) {
       try {
-        const url = `${base}/search?q=${encodeURIComponent(term)}&filter=music_songs`;
+        const url = `${base}/api/v1/search?q=${encodeURIComponent(term)}&type=video&fields=${encodeURIComponent(fields)}`;
         const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
         if (!resp.ok) continue;
-        const data = await resp.json();
-        const items = data.items || [];
+        const items = await resp.json();
+        if (!Array.isArray(items) || items.length === 0) continue;
 
-        const tracks = items.slice(0, limit).map(t => {
-          const vid = (t.url || '').replace('/watch?v=', '').split('&')[0].trim();
-          if (!vid) return null;
-          return {
-            trackId:        `p_${vid}`,
-            trackName:      t.title || 'Inconnu',
-            artistName:     t.uploaderName || 'Artiste inconnu',
-            collectionName: '',
-            collectionId:   '',
-            artworkUrl:     t.thumbnail || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-            artworkSmall:   `https://i.ytimg.com/vi/${vid}/default.jpg`,
-            previewUrl:     '',      // résolu dans playTrack via resolvePipedStream
-            pipedId:        vid,
-            pipedBase:      base,
-            duration:       t.duration || 0,
-            genre:          '',
-            releaseDate:    '',
-            trackNumber:    1,
-            artistId:       '',
-            source:         'youtube',
-            explicit:       false,
-          };
-        }).filter(Boolean);
+        const tracks = items.slice(0, limit).map(t => ({
+          trackId:        `iv_${t.videoId}`,
+          trackName:      t.title || 'Inconnu',
+          artistName:     t.author || 'Artiste inconnu',
+          collectionName: '',
+          collectionId:   '',
+          artworkUrl:     t.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${t.videoId}/hqdefault.jpg`,
+          artworkSmall:   `https://i.ytimg.com/vi/${t.videoId}/default.jpg`,
+          previewUrl:     '',      // résolu dans playTrack via resolveInvidiousStream
+          invidiousId:    t.videoId,
+          invidiousBase:  base,
+          duration:       t.lengthSeconds || 0,
+          genre:          '',
+          releaseDate:    '',
+          trackNumber:    1,
+          artistId:       '',
+          source:         'youtube',
+          explicit:       false,
+        }));
 
         if (tracks.length > 0) {
-          console.info(`[NexSon] Piped (${base}): ${tracks.length} titres pour "${term}"`);
+          console.info(`[NexSon] Invidious (${base}): ${tracks.length} titres pour "${term}"`);
           return tracks;
         }
       } catch (_) { /* instance KO, essai suivant */ }
@@ -64,26 +62,39 @@ const API = {
     return [];
   },
 
-  /* ── Résoudre l'URL audio via Piped /streams (appelé au Play) ── */
-  async resolvePipedStream(videoId, preferredBase = '') {
+  /* ── Résoudre l'URL audio via Invidious /api/v1/videos (appelé au Play) ──
+     Note : <audio src="url"> n'applique pas CORS — seul fetch() l'exige.
+     Invidious fournit CORS sur ses API, et l'audio est joué via l'élément HTML.
+  ── */
+  async resolveInvidiousStream(videoId, preferredBase = '') {
     const order = preferredBase
-      ? [preferredBase, ...this.PIPED_INSTANCES.filter(b => b !== preferredBase)]
-      : this.PIPED_INSTANCES;
+      ? [preferredBase, ...this.INVIDIOUS_INSTANCES.filter(b => b !== preferredBase)]
+      : this.INVIDIOUS_INSTANCES;
 
     for (const base of order) {
       try {
-        const resp = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`,
-          { signal: AbortSignal.timeout(8000) });
+        const resp = await fetch(
+          `${base}/api/v1/videos/${encodeURIComponent(videoId)}?fields=adaptiveFormats`,
+          { signal: AbortSignal.timeout(8000) }
+        );
         if (!resp.ok) continue;
         const data = await resp.json();
-        const streams = data.audioStreams || [];
-        if (!streams.length) continue;
-        // Meilleure qualité audio (bitrate le plus élevé)
-        const best = streams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-        if (best?.url) return best.url;
+        const formats = (data.adaptiveFormats || []).filter(f => f.type?.startsWith('audio/'));
+        if (!formats.length) continue;
+
+        // Préférer les formats proxy (URL sur le domaine Invidious = pas d'IP binding)
+        const hostname = new URL(base).hostname;
+        const proxied = formats.filter(f => f.url?.includes(hostname));
+        const pool    = proxied.length > 0 ? proxied : formats;
+        const best    = pool.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+
+        if (best?.url) {
+          console.info(`[NexSon] Invidious stream: ${best.type} ${best.bitrate}bps [${proxied.length > 0 ? 'proxié ✓' : 'direct'}]`);
+          return best.url;
+        }
       } catch (_) {}
     }
-    throw new Error('Piped: stream introuvable sur toutes les instances');
+    throw new Error('Invidious: stream audio introuvable sur toutes les instances');
   },
 
   /* ══════════════════════════════════════════
@@ -103,89 +114,6 @@ const API = {
       ...t,
       previewUrl: t.ytVideoId ? `${CONFIG.MUSIC_API}/stream?id=${t.ytVideoId}` : '',
     })).filter(t => t.previewUrl);
-  },
-
-  /* ══════════════════════════════════════════
-     x007 WORKERS API — Full Track Streams
-     https://musicapi.x007.workers.dev/search
-  ══════════════════════════════════════════ */
-
-  /* ── Normalize x007 response → internal format ── */
-  _normalizeX007(t, engine) {
-    // Handle the various field names different engines return
-    const audio   = t.url        || t.audio    || t.stream   || t.link
-                 || t.download   || t.mp3      || t.media    || '';
-    const artwork = t.thumbnail  || t.image    || t.cover    || t.artwork
-                 || t.poster     || t.img      || '';
-    const title   = t.title      || t.name     || t.song     || t.trackName || 'Inconnu';
-    const artist  = t.artist     || t.singer   || t.artistName
-                 || t.authors    || t.author   || 'Artiste inconnu';
-    const id      = t.id         || t.trackId  || t.song_id  || t.songId || '';
-
-    return {
-      trackId:        `x_${engine}_${id || Math.random().toString(36).slice(2)}`,
-      trackName:      title,
-      artistName:     artist,
-      collectionName: t.album || t.albumName || '',
-      collectionId:   '',
-      artworkUrl:     artwork,
-      artworkSmall:   artwork,
-      previewUrl:     audio,   // URL directe si disponible dans la réponse search
-      x007Id:         id,      // ID pour /fetch si pas d'URL directe
-      duration:       t.duration || t.length || 0,
-      genre:          t.genre || '',
-      releaseDate:    t.year || t.releaseDate || '',
-      trackNumber:    1,
-      artistId:       '',
-      source:         'x007',  // pas de badge 30s
-      explicit:       false,
-    };
-  },
-
-  /* ── x007: resolve stream URL from song ID (called on play) ── */
-  async resolveX007Stream(songId) {
-    const url = `https://musicapi.x007.workers.dev/fetch?id=${encodeURIComponent(songId)}`;
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`x007 fetch HTTP ${resp.status}`);
-    const data = await resp.json();
-    const stream = data.url || data.stream || data.audio || data.link
-                || data.mp3 || data.media || data.download || '';
-    if (!stream) throw new Error('x007 /fetch: aucune URL dans la réponse');
-    return stream;
-  },
-
-  /* ── x007: tous les engines en parallèle, combine et déduplique ── */
-  async _searchX007(term, limit = 25) {
-    const engines = ['gaama', 'seevn', 'hunjama', 'mtmusic', 'wunk'];
-
-    const settled = await Promise.allSettled(engines.map(async engine => {
-      const url = `https://musicapi.x007.workers.dev/search` +
-        `?q=${encodeURIComponent(term)}&searchEngine=${engine}`;
-      const resp = await fetch(url);
-      if (!resp.ok) return [];
-      const raw = await resp.json();
-      const items = Array.isArray(raw)
-        ? raw
-        : (raw.results || raw.data || raw.songs || raw.tracks || raw.items || []);
-      const tracks = items
-        .map(t => this._normalizeX007(t, engine))
-        .filter(t => t.previewUrl || t.x007Id);
-      if (tracks.length) console.info(`[NexSon] x007/${engine}: ${tracks.length} titres`);
-      return tracks;
-    }));
-
-    // Fusion + déduplication titre|artiste
-    const seen = new Set();
-    const all = settled
-      .filter(r => r.status === 'fulfilled')
-      .flatMap(r => r.value)
-      .filter(t => {
-        const key = `${t.trackName.toLowerCase()}|${t.artistName.toLowerCase()}`;
-        if (seen.has(key)) return false;
-        seen.add(key); return true;
-      });
-
-    return all.slice(0, limit);
   },
 
   /* ══════════════════════════════════════════
@@ -261,17 +189,17 @@ const API = {
     throw new Error('Jamendo inaccessible — JSONP et proxies ont échoué');
   },
 
-  /* ── Main search — Piped → Python local → x007 → Jamendo (jamais de preview 30s) ── */
+  /* ── Main search — Invidious → Python local → Jamendo ── */
   async search(term, limit = 25) {
     const cacheKey = `jsearch_${term}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
 
-    // 1) Piped API — YouTube Music depuis le navigateur (GitHub Pages OK)
+    // 1) Invidious API — YouTube, CORS activé, GitHub Pages OK
     try {
-      const piped = await this._searchPiped(term, limit);
-      if (piped.length > 0) {
-        this._cache[cacheKey] = piped;
-        return piped;
+      const inv = await this._searchInvidious(term, limit);
+      if (inv.length > 0) {
+        this._cache[cacheKey] = inv;
+        return inv;
       }
     } catch (_) {}
 
@@ -281,15 +209,6 @@ const API = {
       if (yt.length > 0) {
         this._cache[cacheKey] = yt;
         return yt;
-      }
-    } catch (_) {}
-
-    // 3) x007 Workers API — titres complets, tous engines en parallèle
-    try {
-      const x007 = await this._searchX007(term, limit);
-      if (x007.length > 0) {
-        this._cache[cacheKey] = x007;
-        return x007;
       }
     } catch (_) {}
 
@@ -310,8 +229,7 @@ const API = {
       console.warn(`[NexSon] Jamendo indisponible (${e.message})`);
     }
 
-    // iTunes retiré — aucun preview 30s dans NexSon
-    console.warn(`[NexSon] Aucun résultat pour "${term}" (x007 + Jamendo épuisés)`);
+    console.warn(`[NexSon] Aucun résultat pour "${term}" (Invidious + Jamendo épuisés)`);
     return [];
   },
 

@@ -64,23 +64,18 @@ const Player = {
     }
     Store.setQueueIdx(this.queueIdx);
 
-    // ── Résolution lazy de l'URL audio (Piped ou x007) ──
-    if (!track.previewUrl && (track.pipedId || track.x007Id)) {
+    // ── Résolution lazy de l'URL audio (Invidious) ──
+    if (!track.previewUrl && track.invidiousId) {
       this._updatePlayerUI(track);
       UI.toast('Chargement…', 'info', 2000);
       try {
-        let streamUrl = '';
-        if (track.pipedId) {
-          streamUrl = await API.resolvePipedStream(track.pipedId, track.pipedBase);
-        } else {
-          streamUrl = await API.resolveX007Stream(track.x007Id);
-        }
+        const streamUrl = await API.resolveInvidiousStream(track.invidiousId, track.invidiousBase);
         track.previewUrl = streamUrl;
         const qi = this.queue.findIndex(t => t.trackId === track.trackId);
         if (qi >= 0) this.queue[qi].previewUrl = streamUrl;
         Store.setQueue(this.queue);
       } catch (e) {
-        console.error('[NexSon] stream resolve failed:', e.message);
+        console.error('[NexSon] Invidious stream resolve failed:', e.message);
         UI.toast('Impossible de charger ce titre — essaie le suivant', 'error');
         return;
       }
