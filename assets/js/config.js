@@ -17,9 +17,11 @@ const CONFIG = {
   USE_BACKEND: false, // Set to true once backend is running
   // Music Service (ytmusicapi + yt-dlp proxy) — python server/music_service.py
   // Run: pip install -r server/requirements.txt && python server/music_service.py
-  MUSIC_API: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:5000'
-    : '',
+  MUSIC_API: window.NEXSON_MUSIC_API || (
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:5000'
+      : ''
+  ),
 
   // API musicale personnalisée (à brancher sur ton VPS/proxy).
   // Le front attend des endpoints REST simples :
@@ -27,8 +29,8 @@ const CONFIG = {
   //   GET /tracks/:id
   //   GET /tracks/:id/stream
   // Ne mets jamais de clé secrète directement ici : garde-la côté VPS.
-  CUSTOM_MUSIC_API: '',
-  CUSTOM_MUSIC_API_ENABLED: false,
+  CUSTOM_MUSIC_API: window.NEXSON_MUSIC_API || '',
+  CUSTOM_MUSIC_API_ENABLED: Boolean(window.NEXSON_MUSIC_API),
 };
 
 /* ─── Genre Data with inline SVG icons ─── */
