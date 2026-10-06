@@ -12,6 +12,7 @@ const Player = {
   muted:      false,
   _shuffleOrder: [],
   _progressInterval: null,
+  _subscribers: new Set(),
 
   init() {
     this.audio    = document.getElementById('audio-player');
@@ -44,7 +45,14 @@ const Player = {
     this.audio.addEventListener('loadstart',  () => this._onLoadStart());
     this.audio.addEventListener('canplay',    () => this._onCanPlay());
     this.audio.addEventListener('play',       () => { this.isPlaying = true; this._updatePlayUI(true); });
-    this.audio.addEventListener('pause',      () => { this.isPlaying = false; this._updatePlayUI(false); });
+    this.audio.addEventListener('pause',      () => { this.isPlaying = false; this._updatePlayUI(false); this._emitState('pause'); });
+    this.audio.addEventListener('playing',     () => { this._setLoading(false); this._emitState('playing'); });
+    this.audio.addEventListener('waiting',     () => this._setLoading(true));
+    this.audio.addEventListener('stalled',     () => this._setLoading(true));
+    this.audio.addEventListener('durationchange', () => this._syncMediaPosition());
+    this.audio.addEventListener('volumechange', () => this._emitState('volumechange'));
+
+    this._initMediaSession();
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => this._handleKey(e));
@@ -64,26 +72,25 @@ const Player = {
     }
     Store.setQueueIdx(this.queueIdx);
 
-    // ── Résolution lazy de l'URL audio (Invidious) ──
-    if (!track.previewUrl && track.invidiousId) {
+    // ── Résolution lazy du flux audio, quel que soit le fournisseur ──
+    if (!track.previewUrl) {
       this._updatePlayerUI(track);
-      UI.toast('Chargement…', 'info', 2000);
+      this._setLoading(true);
+
       try {
-        const streamUrl = await API.resolveInvidiousStream(track.invidiousId, track.invidiousBase);
+        const streamUrl = await API.resolveTrackStream(track);
         track.previewUrl = streamUrl;
+
         const qi = this.queue.findIndex(t => t.trackId === track.trackId);
         if (qi >= 0) this.queue[qi].previewUrl = streamUrl;
+
         Store.setQueue(this.queue);
       } catch (e) {
-        console.error('[NexSon] Invidious stream resolve failed:', e.message);
+        this._setLoading(false);
+        console.error('[NexSon] Stream resolve failed:', e.message);
         UI.toast('Impossible de charger ce titre — essaie le suivant', 'error');
         return;
       }
-    }
-
-    if (!track.previewUrl) {
-      UI.toast('Audio non disponible pour ce titre', 'error');
-      return;
     }
 
     console.info(`[NexSon] Lecture : ${track.trackName} | source: ${track.source} | url: ${track.previewUrl}`);
@@ -97,6 +104,8 @@ const Player = {
 
     Store.addRecent(track);
     this._updatePlayerUI(track);
+    this._updateMediaSession(track);
+    this._emitState('trackchange');
     UI.updateQueuePanel();
     Lyrics.loadForTrack(track);
     this._buildShuffleOrder();
@@ -251,6 +260,103 @@ const Player = {
     return this.queue[this.queueIdx] || null;
   },
 
+  /* ── Public player state — useful for any future API/UI integration ── */
+  getState() {
+    return {
+      track: this.currentTrack(),
+      queue: [...this.queue],
+      queueIndex: this.queueIdx,
+      playing: this.isPlaying,
+      loading: document.getElementById('play-pause-btn')?.classList.contains('loading') || false,
+      currentTime: this.audio?.currentTime || 0,
+      duration: Number.isFinite(this.audio?.duration) ? this.audio.duration : 0,
+      volume: this.audio ? Math.round(this.audio.volume * 100) : 0,
+      muted: this.muted,
+      shuffle: this.shuffle,
+      repeat: this.repeat,
+    };
+  },
+
+  subscribe(callback) {
+    if (typeof callback !== 'function') return () => {};
+    this._subscribers.add(callback);
+    callback(this.getState(), 'subscribe');
+    return () => this._subscribers.delete(callback);
+  },
+
+  _emitState(reason = 'change') {
+    if (!this._subscribers.size) return;
+    const state = this.getState();
+    this._subscribers.forEach(fn => {
+      try { fn(state, reason); } catch (e) { console.warn('[NexSon] Player subscriber error:', e); }
+    });
+  },
+
+  _setLoading(loading) {
+    const btn = document.getElementById('play-pause-btn');
+    if (btn) btn.classList.toggle('loading', Boolean(loading));
+  },
+
+  _initMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+
+    const safeSet = (action, handler) => {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) {}
+    };
+
+    safeSet('play', () => this.audio?.play());
+    safeSet('pause', () => this.audio?.pause());
+    safeSet('previoustrack', () => this.prev());
+    safeSet('nexttrack', () => this.next());
+    safeSet('seekbackward', details => {
+      if (!this.audio) return;
+      const step = details.seekOffset || 10;
+      this.audio.currentTime = Math.max(0, this.audio.currentTime - step);
+    });
+    safeSet('seekforward', details => {
+      if (!this.audio) return;
+      const step = details.seekOffset || 10;
+      const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : Infinity;
+      this.audio.currentTime = Math.min(duration, this.audio.currentTime + step);
+    });
+    safeSet('seekto', details => {
+      if (!this.audio || typeof details.seekTime !== 'number') return;
+      this.audio.currentTime = details.seekTime;
+    });
+  },
+
+  _updateMediaSession(track) {
+    if (!('mediaSession' in navigator) || !track || !('MediaMetadata' in window)) return;
+
+    const artwork = track.artworkUrl
+      ? [{ src: track.artworkUrl, sizes: '512x512', type: 'image/jpeg' }]
+      : [];
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.trackName || 'NexSon',
+        artist: track.artistName || '',
+        album: track.collectionName || '',
+        artwork,
+      });
+      navigator.mediaSession.playbackState = this.isPlaying ? 'playing' : 'paused';
+    } catch (_) {}
+  },
+
+  _syncMediaPosition() {
+    if (!('mediaSession' in navigator) || !this.audio) return;
+    const duration = this.audio.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: this.audio.playbackRate || 1,
+        position: Math.min(this.audio.currentTime || 0, duration),
+      });
+    } catch (_) {}
+  },
+
   /* ── Private: Audio events ── */
   _onTimeUpdate() {
     const { currentTime, duration } = this.audio;
@@ -266,6 +372,9 @@ const Player = {
 
     const total = document.getElementById('total-time');
     if (total && duration) total.textContent = this._formatTime(duration);
+
+    this._syncMediaPosition();
+    this._emitState('timeupdate');
   },
 
   _onEnded() {
@@ -288,13 +397,18 @@ const Player = {
   _onLoadStart() {
     const btn = document.getElementById('play-pause-btn');
     if (btn) btn.style.opacity = '0.7';
+    this._setLoading(true);
+    this._emitState('loadstart');
   },
 
   _onCanPlay() {
     const btn = document.getElementById('play-pause-btn');
     if (btn) btn.style.opacity = '';
+    this._setLoading(false);
     const total = document.getElementById('total-time');
     if (total && this.audio.duration) total.textContent = this._formatTime(this.audio.duration);
+    this._syncMediaPosition();
+    this._emitState('canplay');
   },
 
   /* ── Private: UI Updates ── */
@@ -334,6 +448,10 @@ const Player = {
   },
 
   _updatePlayUI(playing) {
+    if ('mediaSession' in navigator) {
+      try { navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'; } catch (_) {}
+    }
+
     const playIcon  = document.getElementById('play-icon');
     const pauseIcon = document.getElementById('pause-icon');
     if (playIcon)  playIcon.classList.toggle('hidden', playing);
