@@ -1832,6 +1832,10 @@ a {
 
 /* Tablet / mobile drawer sizing with dynamic viewport. */
 @media (max-width: 900px) {
+  .player-bar {
+    grid-column: 1 / 2;
+  }
+
   .sidebar {
     height: calc(100vh - var(--player-h) - var(--safe-bottom));
     height: calc(100dvh - var(--player-h) - var(--safe-bottom));
@@ -1851,6 +1855,7 @@ a {
 
 @media (max-width: 768px) {
   .side-panel {
+    top: auto;
     bottom: calc(var(--player-h) + var(--safe-bottom));
     height: min(70vh, calc(100dvh - var(--player-h) - var(--safe-bottom) - var(--safe-top)));
     padding-bottom: var(--safe-bottom);
