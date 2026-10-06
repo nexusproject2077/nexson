@@ -2327,3 +2327,29 @@ a {
     padding-bottom: 4px;
   }
 }
+
+
+/* Player loading/buffering state */
+.player-btn-play.loading {
+  position: relative;
+}
+
+.player-btn-play.loading #play-icon,
+.player-btn-play.loading #pause-icon {
+  opacity: 0;
+}
+
+.player-btn-play.loading::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(10,10,18,.28);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: playerLoadingSpin .7s linear infinite;
+}
+
+@keyframes playerLoadingSpin {
+  to { transform: rotate(360deg); }
+}
