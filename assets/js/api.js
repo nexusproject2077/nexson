@@ -152,19 +152,13 @@ const API = {
     }
 
     if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API && track.trackId) {
-      try {
-        const data = await this._customFetch(
-          track.streamEndpoint || `/tracks/${encodeURIComponent(track.trackId)}/stream`
-        );
+      const base = CONFIG.CUSTOM_MUSIC_API.replace(/\/$/, '');
+      const endpoint = track.streamEndpoint || `/tracks/${encodeURIComponent(track.trackId)}/stream`;
 
-        const stream =
-          data?.url ?? data?.streamUrl ?? data?.audioUrl ??
-          data?.previewUrl ?? data?.data?.url ?? '';
-
-        if (stream) return stream;
-      } catch (e) {
-        console.warn('[NexSon] Custom API stream error:', e.message);
-      }
+      // A stream endpoint is consumed directly by <audio>; do not pre-fetch
+      // the media body in JavaScript before giving it to the player.
+      if (/^https?:\/\//i.test(endpoint)) return endpoint;
+      return `${base}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
     }
 
     throw new Error('Aucun flux audio disponible');
