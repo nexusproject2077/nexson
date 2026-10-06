@@ -4,7 +4,8 @@ Une plateforme de streaming musical premium — gratuite, titres complets, sans 
 
 ## Fonctionnalités
 
-- **Titres complets** via Jamendo API (Creative Commons — pas de limite 30 secondes)
+- **Recherche musicale** via YouTube Data API v3, avec fallback Jamendo/yt-dlp selon la configuration
+- **Lecteur complet** : play/pause, précédent/suivant, seek, volume, file d'attente, aléatoire, répétition, Media Session
 - **Authentification** MongoDB sécurisée (+ fallback localStorage)
 - **Recherche automatique** avec résultats en temps réel
 - **Paroles** en temps réel via Lyrics.ovh
@@ -82,6 +83,60 @@ API_BASE: 'http://localhost:3001',  // ← ton URL backend
 
 ---
 
+## API musicale YouTube
+
+Le frontend ne contient aucune clé Google. La clé YouTube Data API v3 reste uniquement sur le VPS dans `server/.env`.
+
+### 1. Configurer le service musical
+
+```bash
+cd server
+cp .env.example .env
+nano .env
+```
+
+Ajoute la clé dans le fichier local `.env` :
+
+```env
+YOUTUBE_API_KEY=ta_cle_youtube_data_api
+MUSIC_PORT=5000
+```
+
+Puis installe et démarre le service :
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python music_service.py
+```
+
+Tests locaux :
+
+```text
+GET http://127.0.0.1:5000/health
+GET http://127.0.0.1:5000/search?q=The%20Weeknd&limit=10
+GET http://127.0.0.1:5000/tracks/VIDEO_ID
+GET http://127.0.0.1:5000/tracks/VIDEO_ID/stream
+```
+
+La recherche et les métadonnées utilisent l'API YouTube officielle. La lecture audio reste gérée côté serveur par le service de streaming et le lecteur HTML5 NexSon.
+
+### 2. Relier GitHub Pages au VPS
+
+Expose le service musical derrière une URL HTTPS publique, puis renseigne uniquement cette URL dans :
+
+`assets/js/runtime-config.js`
+
+```javascript
+window.NEXSON_MUSIC_API = 'https://ton-domaine-api.example';
+```
+
+Aucune clé API ni secret OAuth ne doit être ajouté dans ce fichier.
+
+
+---
+
 ## Structure
 
 ```
@@ -113,7 +168,8 @@ NexSon/
 | | Technologie |
 |--|--|
 | Frontend | HTML5, CSS3, JavaScript vanilla |
-| Musique | Jamendo API (titres CC complets) |
+| Recherche musique | YouTube Data API v3 + fallbacks |
+| Lecture | Service Python + lecteur HTML5 |
 | Paroles | Lyrics.ovh |
 | Backend | Node.js, Express |
 | Base de données | MongoDB Atlas + Mongoose |
