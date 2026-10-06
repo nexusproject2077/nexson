@@ -1633,3 +1633,692 @@ img { display: block; max-width: 100%; }
   .player-cover { width: 42px; height: 42px; }
   .home-greeting h1 { font-size: 20px; }
 }
+/* ══════════════════════════════════════════════
+   RESPONSIVE HARDENING — iOS / MOBILE / SMALL VIEWPORTS
+   Keeps every screen usable with dynamic browser chrome,
+   safe areas and narrow viewports.
+══════════════════════════════════════════════ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+}
+
+body {
+  height: 100vh;
+  height: 100dvh;
+}
+
+button,
+input,
+textarea,
+select,
+a {
+  min-width: 0;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* Authentication: center when it fits, scroll naturally when it does not. */
+.auth-screen {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100svh;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding:
+    max(16px, var(--safe-top))
+    max(0px, var(--safe-right))
+    max(16px, var(--safe-bottom))
+    max(0px, var(--safe-left));
+}
+
+.auth-bg {
+  position: fixed;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.auth-container {
+  flex: none;
+  width: min(100%, 500px);
+  max-width: 500px;
+  min-width: 0;
+  margin: auto;
+  padding: 16px 24px;
+  gap: 24px;
+}
+
+.auth-card {
+  min-width: 0;
+  padding: 36px;
+}
+
+.auth-form,
+.form-group,
+.input-password,
+.form-options {
+  min-width: 0;
+}
+
+.form-options {
+  gap: 16px;
+}
+
+.checkbox-label,
+.forgot-link {
+  line-height: 1.35;
+}
+
+.auth-features {
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
+}
+
+.feature-item {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Main application: use the visible viewport instead of legacy 100vh. */
+.app {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  grid-template-rows: minmax(0, 1fr) calc(var(--player-h) + var(--safe-bottom));
+}
+
+.content-wrapper,
+.page-content,
+.player-bar,
+.player-track,
+.player-track-info,
+.player-controls {
+  min-width: 0;
+}
+
+.content-wrapper {
+  min-height: 0;
+}
+
+.page-content {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sidebar {
+  height: calc(100vh - var(--player-h) - var(--safe-bottom));
+  height: calc(100dvh - var(--player-h) - var(--safe-bottom));
+}
+
+.side-panel {
+  height: calc(100vh - var(--player-h) - var(--safe-bottom));
+  height: calc(100dvh - var(--player-h) - var(--safe-bottom));
+}
+
+.player-bar {
+  height: calc(var(--player-h) + var(--safe-bottom));
+}
+
+.toast-container {
+  bottom: calc(var(--player-h) + var(--safe-bottom) + 20px);
+}
+
+.sidebar-toggle {
+  bottom: calc(var(--player-h) + var(--safe-bottom) + 16px);
+}
+
+/* Long labels/titles should wrap instead of being clipped. */
+.view-title,
+.profile-name,
+.top-result-name,
+.featured-track .ft-title,
+.hero-title {
+  overflow-wrap: anywhere;
+}
+
+.modal-overlay {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding:
+    max(16px, var(--safe-top))
+    max(16px, var(--safe-right))
+    max(16px, var(--safe-bottom))
+    max(16px, var(--safe-left));
+}
+
+.modal {
+  max-height: calc(100vh - 32px - var(--safe-top) - var(--safe-bottom));
+  max-height: calc(100dvh - 32px - var(--safe-top) - var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header,
+.modal-footer {
+  flex-shrink: 0;
+}
+
+.modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.context-menu {
+  max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
+  max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
+  overflow-y: auto;
+}
+
+/* Tablet / mobile drawer sizing with dynamic viewport. */
+@media (max-width: 900px) {
+  .sidebar {
+    height: calc(100vh - var(--player-h) - var(--safe-bottom));
+    height: calc(100dvh - var(--player-h) - var(--safe-bottom));
+    max-width: min(86vw, 300px);
+  }
+
+  .page-content {
+    padding-left: max(20px, var(--safe-left));
+    padding-right: max(20px, var(--safe-right));
+  }
+
+  .view-title {
+    white-space: normal;
+    text-overflow: clip;
+  }
+}
+
+@media (max-width: 768px) {
+  .side-panel {
+    bottom: calc(var(--player-h) + var(--safe-bottom));
+    height: min(70vh, calc(100dvh - var(--player-h) - var(--safe-bottom) - var(--safe-top)));
+    padding-bottom: var(--safe-bottom);
+  }
+
+  .profile-stats,
+  .library-filters {
+    flex-wrap: wrap;
+  }
+
+  .library-search {
+    min-width: min(100%, 220px);
+  }
+
+  .modal {
+    width: min(100%, 480px);
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --player-h: 72px;
+  }
+
+  /* Login/register: prevent the top and bottom from disappearing behind Safari UI. */
+  .auth-screen {
+    padding-top: max(10px, var(--safe-top));
+    padding-bottom: max(12px, var(--safe-bottom));
+  }
+
+  .auth-container {
+    width: 100%;
+    max-width: 440px;
+    padding: 8px 16px 18px;
+    gap: 18px;
+  }
+
+  .auth-brand {
+    gap: 9px;
+  }
+
+  .auth-logo svg {
+    width: 36px;
+    height: 36px;
+  }
+
+  .auth-brand-name {
+    font-size: 28px;
+    letter-spacing: 3px;
+  }
+
+  .auth-card {
+    width: 100%;
+    padding: 24px 20px;
+    border-radius: 20px;
+  }
+
+  .auth-title {
+    font-size: clamp(22px, 6.2vw, 26px);
+    line-height: 1.15;
+  }
+
+  .auth-subtitle {
+    margin-bottom: 24px;
+    line-height: 1.45;
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+  }
+
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    min-height: 48px;
+    font-size: 16px; /* Prevents iOS Safari input zoom. */
+  }
+
+  .input-password input {
+    padding-right: 50px;
+  }
+
+  .toggle-password {
+    min-width: 38px;
+    min-height: 38px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+  }
+
+  .form-options {
+    margin-bottom: 16px;
+    gap: 10px 14px;
+  }
+
+  .checkbox-label,
+  .forgot-link {
+    font-size: 13px;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+  }
+
+  .btn-auth {
+    min-height: 50px;
+    padding: 13px 14px;
+  }
+
+  .auth-divider {
+    margin-top: 16px;
+  }
+
+  .btn-demo {
+    margin-top: 10px;
+  }
+
+  .auth-switch {
+    margin-top: 16px;
+    line-height: 1.4;
+  }
+
+  .auth-features {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .feature-item {
+    white-space: nowrap;
+    font-size: 11.5px;
+    padding: 7px 11px;
+  }
+
+  /* Safe-area aware app chrome. */
+  .topbar {
+    height: calc(var(--topbar-h) + var(--safe-top));
+    padding-top: var(--safe-top);
+    padding-left: max(10px, var(--safe-left));
+    padding-right: max(10px, var(--safe-right));
+  }
+
+  .topbar-search-wrap {
+    top: calc(var(--topbar-h) + var(--safe-top));
+    padding-left: max(14px, var(--safe-left));
+    padding-right: max(14px, var(--safe-right));
+  }
+
+  .topbar-search input {
+    font-size: 16px;
+  }
+
+  .topbar-right {
+    gap: 2px;
+  }
+
+  .topbar .btn-icon,
+  .topbar .notif-btn {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .page-content {
+    padding: 16px max(16px, var(--safe-right)) 24px max(16px, var(--safe-left));
+  }
+
+  .sidebar {
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+  }
+
+  .player-bar {
+    height: calc(var(--player-h) + var(--safe-bottom));
+    padding: 6px max(10px, var(--safe-right)) max(8px, var(--safe-bottom)) max(10px, var(--safe-left));
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .player-track {
+    gap: 8px;
+  }
+
+  .player-cover {
+    width: 44px;
+    height: 44px;
+  }
+
+  .player-like-btn {
+    padding: 3px;
+  }
+
+  .player-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .player-btn-play {
+    width: 40px;
+    height: 40px;
+  }
+
+  .player-btns {
+    gap: 0;
+  }
+
+  .side-panel {
+    bottom: calc(var(--player-h) + var(--safe-bottom));
+    height: min(68vh, calc(100dvh - var(--player-h) - var(--safe-bottom) - var(--safe-top)));
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+  }
+
+  /* Content grids never overflow the screen. */
+  .cards-grid,
+  .genres-grid,
+  .quick-access {
+    min-width: 0;
+  }
+
+  .card,
+  .genre-card,
+  .quick-item,
+  .featured-track {
+    min-width: 0;
+  }
+
+  .section-header {
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .section-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .section-see-all {
+    flex: 0 0 auto;
+  }
+
+  .view-header {
+    width: 100%;
+  }
+
+  .view-meta {
+    width: 100%;
+  }
+
+  .view-title {
+    width: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .track-actions {
+    opacity: 1;
+  }
+
+  .settings-row {
+    min-width: 0;
+  }
+
+  .settings-row > div:first-child {
+    min-width: 0;
+  }
+
+  .toast-container {
+    left: max(12px, var(--safe-left));
+    right: max(12px, var(--safe-right));
+    bottom: calc(var(--player-h) + var(--safe-bottom) + 12px);
+  }
+
+  .toast {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .cards-grid,
+  .genres-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .card-cover {
+    margin-bottom: 10px;
+  }
+
+  .quick-access {
+    grid-template-columns: 1fr;
+  }
+
+  .featured-track {
+    padding: 18px;
+    gap: 14px;
+  }
+
+  .featured-track .ft-cover {
+    width: 82px;
+    height: 82px;
+  }
+
+  .library-filters {
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .library-search,
+  .sort-select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .profile-stats {
+    width: 100%;
+    justify-content: center;
+    row-gap: 12px;
+  }
+
+  .settings-row {
+    gap: 12px;
+  }
+
+  .modal-overlay {
+    align-items: flex-start;
+    padding:
+      max(12px, var(--safe-top))
+      max(12px, var(--safe-right))
+      max(12px, var(--safe-bottom))
+      max(12px, var(--safe-left));
+  }
+
+  .modal {
+    width: 100%;
+    border-radius: 18px;
+    max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
+  }
+
+  .modal-header,
+  .modal-body {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .modal-footer {
+    padding: 14px 18px;
+    flex-wrap: wrap;
+  }
+
+  .modal-footer .btn-primary,
+  .modal-footer .btn-secondary {
+    flex: 1 1 120px;
+  }
+
+  /* Keep track rows readable on narrow phones. */
+  .track-list-header {
+    display: none;
+  }
+
+  .track-item,
+  .track-list-compact .track-item {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px 6px;
+  }
+
+  .track-duration {
+    display: none;
+  }
+
+  .track-actions {
+    gap: 0;
+  }
+
+  .track-like-btn,
+  .track-more-btn {
+    min-width: 32px;
+    min-height: 32px;
+    display: grid;
+    place-items: center;
+  }
+}
+
+@media (max-width: 380px) {
+  .auth-container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .auth-card {
+    padding: 20px 16px;
+  }
+
+  .form-options {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .forgot-link {
+    margin-left: auto;
+  }
+
+  .feature-item {
+    white-space: normal;
+    text-align: center;
+  }
+
+  .player-like-btn {
+    display: none;
+  }
+
+  .player-cover {
+    width: 40px;
+    height: 40px;
+  }
+
+  .player-track-name {
+    font-size: 12px;
+  }
+
+  .player-track-artist {
+    font-size: 10.5px;
+  }
+
+  .topbar .btn-icon,
+  .topbar .notif-btn {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+}
+
+/* Short screens (landscape phones / browser UI taking a lot of height). */
+@media (max-height: 720px) and (max-width: 900px) {
+  .auth-container {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .auth-brand {
+    margin-top: 2px;
+  }
+
+  .auth-card {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+  .auth-subtitle {
+    margin-bottom: 18px;
+  }
+
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .auth-features {
+    padding-bottom: 4px;
+  }
+}
