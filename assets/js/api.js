@@ -32,6 +32,145 @@ const API = {
   },
 
   /* ══════════════════════════════════════════
+     API MUSICALE PERSONNALISÉE
+     Schéma accepté (les alias courants sont normalisés) :
+     id/trackId, title/trackName, artist/artistName,
+     album/collectionName, artwork/image/cover,
+     audioUrl/streamUrl/previewUrl/url, duration.
+  ══════════════════════════════════════════ */
+
+  _normalizeExternalTrack(t = {}) {
+    const artistObj = typeof t.artist === 'object' && t.artist ? t.artist : null;
+    const albumObj  = typeof t.album === 'object' && t.album ? t.album : null;
+
+    const rawId = t.trackId ?? t.id ?? t.videoId ?? t.uuid ?? '';
+    const title = t.trackName ?? t.title ?? t.name ?? 'Inconnu';
+    const artist = t.artistName ?? artistObj?.name ?? t.artist ?? t.author ?? 'Artiste inconnu';
+    const album = t.collectionName ?? albumObj?.name ?? t.albumName ?? (typeof t.album === 'string' ? t.album : '') ?? '';
+
+    const artwork =
+      t.artworkUrl ?? t.artwork ?? t.image ?? t.cover ??
+      albumObj?.image ?? albumObj?.cover ?? '';
+
+    const audio =
+      t.previewUrl ?? t.audioUrl ?? t.streamUrl ?? t.audio ?? t.url ?? '';
+
+    const durationRaw = t.duration ?? t.durationSeconds ?? t.lengthSeconds ?? 0;
+    const duration = Number(durationRaw) || 0;
+
+    return {
+      ...t,
+      trackId: rawId ? String(rawId) : `api_${encodeURIComponent(String(artist))}_${encodeURIComponent(String(title))}`,
+      trackName: String(title),
+      artistName: String(artist),
+      collectionName: String(album || ''),
+      collectionId: String(t.collectionId ?? albumObj?.id ?? t.albumId ?? ''),
+      artworkUrl: String(artwork || ''),
+      artworkSmall: String(t.artworkSmall ?? artwork ?? ''),
+      previewUrl: String(audio || ''),
+      duration,
+      genre: String(t.genre ?? ''),
+      releaseDate: String(t.releaseDate ?? t.releasedate ?? ''),
+      trackNumber: Number(t.trackNumber ?? t.track_position ?? 1) || 1,
+      artistId: String(t.artistId ?? artistObj?.id ?? ''),
+      source: String(t.source ?? 'custom-api'),
+      explicit: Boolean(t.explicit ?? false),
+      lyrics: t.lyrics ?? null,
+      streamEndpoint: t.streamEndpoint ?? '',
+    };
+  },
+
+  async _customFetch(path, options = {}) {
+    if (!CONFIG.CUSTOM_MUSIC_API_ENABLED || !CONFIG.CUSTOM_MUSIC_API) return null;
+
+    const base = CONFIG.CUSTOM_MUSIC_API.replace(/\/$/, '');
+    const url  = `${base}${path.startsWith('/') ? path : '/' + path}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), options.timeout || 9000);
+
+    try {
+      const resp = await fetch(url, {
+        method: options.method || 'GET',
+        headers: {
+          'Accept': 'application/json',
+          ...(options.headers || {}),
+        },
+        signal: controller.signal,
+      });
+
+      if (!resp.ok) throw new Error(`Custom API HTTP ${resp.status}`);
+
+      const type = resp.headers.get('content-type') || '';
+      if (type.includes('application/json')) return await resp.json();
+
+      return { url: resp.url };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  async _searchCustom(term, limit = 25) {
+    if (!CONFIG.CUSTOM_MUSIC_API_ENABLED || !CONFIG.CUSTOM_MUSIC_API) return [];
+
+    const data = await this._customFetch(
+      `/search?q=${encodeURIComponent(term)}&limit=${encodeURIComponent(limit)}`
+    );
+
+    const rows =
+      Array.isArray(data) ? data :
+      Array.isArray(data?.tracks) ? data.tracks :
+      Array.isArray(data?.results) ? data.results :
+      Array.isArray(data?.data) ? data.data :
+      [];
+
+    return rows.map(t => this._normalizeExternalTrack(t));
+  },
+
+  async getTrackById(trackId) {
+    if (!trackId) return null;
+
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      try {
+        const data = await this._customFetch(`/tracks/${encodeURIComponent(trackId)}`);
+        const row = data?.track ?? data?.data ?? data;
+        if (row && typeof row === 'object') return this._normalizeExternalTrack(row);
+      } catch (e) {
+        console.warn('[NexSon] Custom API track error:', e.message);
+      }
+    }
+
+    return null;
+  },
+
+  async resolveTrackStream(track) {
+    if (!track) throw new Error('Titre manquant');
+    if (track.previewUrl) return track.previewUrl;
+
+    if (track.invidiousId) {
+      return this.resolveInvidiousStream(track.invidiousId, track.invidiousBase);
+    }
+
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API && track.trackId) {
+      try {
+        const data = await this._customFetch(
+          track.streamEndpoint || `/tracks/${encodeURIComponent(track.trackId)}/stream`
+        );
+
+        const stream =
+          data?.url ?? data?.streamUrl ?? data?.audioUrl ??
+          data?.previewUrl ?? data?.data?.url ?? '';
+
+        if (stream) return stream;
+      } catch (e) {
+        console.warn('[NexSon] Custom API stream error:', e.message);
+      }
+    }
+
+    throw new Error('Aucun flux audio disponible');
+  },
+
+  /* ══════════════════════════════════════════
      INVIDIOUS API — YouTube Music sans backend
      Docs : https://docs.invidious.io/api/
      Les instances publiques ont retiré CORS pour les sites
@@ -214,6 +353,17 @@ const API = {
   async search(term, limit = 25) {
     const cacheKey = `jsearch_${term}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
+
+    // 0) API musicale personnalisée — si activée
+    try {
+      const custom = await this._searchCustom(term, limit);
+      if (custom.length > 0) {
+        this._cache[cacheKey] = custom;
+        return custom;
+      }
+    } catch (e) {
+      console.warn('[NexSon] Custom API indisponible:', e.message);
+    }
 
     // 1) Invidious API — YouTube, CORS activé, GitHub Pages OK
     try {
