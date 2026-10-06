@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+server/.env
+node_modules/
+__pycache__/
+*.pyc
+client_secret*.json
+*client_secret*.json
