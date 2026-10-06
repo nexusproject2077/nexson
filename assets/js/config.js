@@ -20,6 +20,15 @@ const CONFIG = {
   MUSIC_API: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:5000'
     : '',
+
+  // API musicale personnalisée (à brancher sur ton VPS/proxy).
+  // Le front attend des endpoints REST simples :
+  //   GET /search?q=...&limit=...
+  //   GET /tracks/:id
+  //   GET /tracks/:id/stream
+  // Ne mets jamais de clé secrète directement ici : garde-la côté VPS.
+  CUSTOM_MUSIC_API: '',
+  CUSTOM_MUSIC_API_ENABLED: false,
 };
 
 /* ─── Genre Data with inline SVG icons ─── */
