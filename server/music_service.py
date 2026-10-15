@@ -254,6 +254,12 @@ def _resolve_stream_url(video_id: str) -> str:
         "no_warnings": True,
         "extract_flat": False,
         "noplaylist": True,
+        # With authenticated cookies, yt-dlp's tv_downgraded client can be
+        # rejected by YouTube with "The page needs to be reloaded". Prefer
+        # the maintained web clients instead.
+        "extractor_args": {
+            "youtube": {"player_client": ["default", "web_embedded"]},
+        },
     })
 
     url = ""
