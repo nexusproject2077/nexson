@@ -87,7 +87,7 @@ const API = {
     const url  = `${base}${path.startsWith('/') ? path : '/' + path}`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), options.timeout || 9000);
+    const timeout = setTimeout(() => controller.abort(), options.timeout || 30000);
 
     try {
       const resp = await fetch(url, {
@@ -343,32 +343,29 @@ const API = {
     throw new Error('Jamendo inaccessible — JSONP et proxies ont échoué');
   },
 
-  /* ── Main search — Invidious → Python local → Jamendo ── */
+  /* ── Main search — NexSon VPS first, legacy fallbacks only if no VPS is configured ── */
   async search(term, limit = 25) {
-    const cacheKey = `jsearch_${term}_${limit}`;
+    const cacheKey = `search_${term}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
 
-    // 0) API musicale personnalisée — si activée
-    try {
-      const custom = await this._searchCustom(term, limit);
-      if (custom.length > 0) {
-        this._cache[cacheKey] = custom;
-        return custom;
+    // Production: the HTTPS NexSon API is authoritative.
+    // Avoid calling public Invidious/CORS proxies when the VPS is configured.
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      try {
+        const custom = await this._searchCustom(term, limit);
+        if (custom.length > 0) {
+          this._cache[cacheKey] = custom;
+          return custom;
+        }
+        console.warn(`[NexSon] API VPS: aucun résultat pour "${term}"`);
+        return [];
+      } catch (e) {
+        console.warn('[NexSon] API VPS indisponible:', e.message);
+        return [];
       }
-    } catch (e) {
-      console.warn('[NexSon] Custom API indisponible:', e.message);
     }
 
-    // 1) Invidious API — YouTube, CORS activé, GitHub Pages OK
-    try {
-      const inv = await this._searchInvidious(term, limit);
-      if (inv.length > 0) {
-        this._cache[cacheKey] = inv;
-        return inv;
-      }
-    } catch (_) {}
-
-    // 2) Python service local (localhost:5000, dev uniquement)
+    // Local/dev fallback
     try {
       const yt = await this._searchYouTube(term, limit);
       if (yt.length > 0) {
@@ -377,7 +374,16 @@ const API = {
       }
     } catch (_) {}
 
-    // 3) Jamendo — titres complets CC (JSONP puis proxy)
+    // Legacy fallback only when no NexSon VPS API is configured.
+    try {
+      const inv = await this._searchInvidious(term, limit);
+      if (inv.length > 0) {
+        this._cache[cacheKey] = inv;
+        return inv;
+      }
+    } catch (_) {}
+
+    // Jamendo fallback
     try {
       const jamendoUrl = `${CONFIG.JAMENDO_API}/tracks/?` +
         `client_id=${CONFIG.JAMENDO_KEY}&format=json` +
@@ -386,15 +392,11 @@ const API = {
       const data = await this._fetchJamendo(jamendoUrl);
       const results = (data.results || []).map(t => this._normalizeJamendo(t));
       if (results.length > 0) {
-        console.info(`[NexSon] Jamendo: ${results.length} titres pour "${term}"`);
         this._cache[cacheKey] = results;
         return results;
       }
-    } catch (e) {
-      console.warn(`[NexSon] Jamendo indisponible (${e.message})`);
-    }
+    } catch (_) {}
 
-    console.warn(`[NexSon] Aucun résultat pour "${term}" (Invidious + Jamendo épuisés)`);
     return [];
   },
 
