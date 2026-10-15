@@ -99,6 +99,9 @@ Ajoute la clé dans le fichier local `.env` :
 
 ```env
 YOUTUBE_API_KEY=ta_cle_youtube_data_api
+# Optional but required if YouTube asks yt-dlp to sign in before streaming.
+# This file stays on the VPS; never commit it or publish it.
+YOUTUBE_COOKIEFILE=/etc/nexson/youtube-cookies.txt
 MUSIC_PORT=5000
 ```
 

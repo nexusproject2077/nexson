@@ -35,11 +35,24 @@ app = Flask(__name__)
 CORS(app)
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
+# Path to a Netscape-format cookie export.  This must live on the VPS and is
+# intentionally only read from the environment; never put cookies in Git.
+YOUTUBE_COOKIEFILE = os.getenv("YOUTUBE_COOKIEFILE", "").strip()
 YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 
 _url_cache: dict = {}
 _cache_lock = threading.Lock()
 CACHE_TTL = 3600
+
+
+def _with_youtube_cookies(options: dict) -> dict:
+    """Attach the optional server-side YouTube cookie jar to yt-dlp calls."""
+    if YOUTUBE_COOKIEFILE:
+        if os.path.isfile(YOUTUBE_COOKIEFILE):
+            options["cookiefile"] = YOUTUBE_COOKIEFILE
+        else:
+            print(f"[NexSon] YOUTUBE_COOKIEFILE introuvable: {YOUTUBE_COOKIEFILE}")
+    return options
 
 
 def _parse_iso8601_duration(value: str) -> int:
@@ -185,12 +198,12 @@ def _get_youtube_video_api(video_id: str):
 
 
 def _search_ytdlp(term: str, limit: int) -> list:
-    ydl_opts = {
+    ydl_opts = _with_youtube_cookies({
         "quiet": True,
         "no_warnings": True,
         "extract_flat": True,
         "ignoreerrors": True,
-    }
+    })
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(f"ytsearch{limit}:{term}", download=False)
@@ -235,13 +248,13 @@ def _resolve_stream_url(video_id: str) -> str:
         if entry and entry["exp"] > now:
             return entry["url"]
 
-    ydl_opts = {
+    ydl_opts = _with_youtube_cookies({
         "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
         "quiet": True,
         "no_warnings": True,
         "extract_flat": False,
         "noplaylist": True,
-    }
+    })
 
     url = ""
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -324,6 +337,13 @@ def _proxy_stream(video_id: str):
 
     except Exception as exc:
         traceback.print_exc()
+        # This is usually a YouTube anti-bot challenge.  A 503 describes the
+        # temporary upstream requirement more accurately than a generic 500.
+        if "Sign in to confirm you\u2019re not a bot" in str(exc) or "Sign in to confirm you're not a bot" in str(exc):
+            return jsonify({
+                "error": "YouTube exige une authentification serveur pour lire ce flux",
+                "code": "YOUTUBE_AUTH_REQUIRED",
+            }), 503
         return jsonify({"error": str(exc)}), 500
 
 
@@ -333,6 +353,7 @@ def health():
         "status": "ok",
         "service": "NexSon Music Service",
         "youtubeDataApi": bool(YOUTUBE_API_KEY),
+        "youtubeCookieFileConfigured": bool(YOUTUBE_COOKIEFILE and os.path.isfile(YOUTUBE_COOKIEFILE)),
         "searchProvider": "youtube-data-api" if YOUTUBE_API_KEY else "yt-dlp",
     })
 
