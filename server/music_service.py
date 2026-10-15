@@ -27,6 +27,9 @@ from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
 import requests as req_lib
 import yt_dlp
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
