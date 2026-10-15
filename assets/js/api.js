@@ -6,6 +6,11 @@
 
 const API = {
   _cache: {},
+  // Indexes built from VPS search responses.  The VPS exposes a track search
+  // endpoint, so artist/album cards are derived from that same authoritative
+  // response instead of making browser-side Jamendo requests.
+  _customArtists: {},
+  _customAlbums: {},
 
   /* ══════════════════════════════════════════
      HELPER : fetch JSON avec fallback CORS proxies
@@ -125,6 +130,53 @@ const API = {
       [];
 
     return rows.map(t => this._normalizeExternalTrack(t));
+  },
+
+  _artistsFromTracks(tracks, limit = 10) {
+    const seen = new Set();
+    return tracks.reduce((artists, track) => {
+      const name = String(track.artistName || '').trim();
+      if (!name) return artists;
+      const key = String(track.artistId || name).toLowerCase();
+      if (seen.has(key) || artists.length >= limit) return artists;
+      seen.add(key);
+      const artistId = track.artistId || `custom_artist_${encodeURIComponent(name)}`;
+      this._customArtists[artistId] = name;
+      artists.push({
+        artistId,
+        artistName: name,
+        genre: track.genre || '',
+        artworkUrl: track.artworkUrl || track.artworkSmall || '',
+      });
+      return artists;
+    }, []);
+  },
+
+  _albumsFromTracks(tracks, limit = 10) {
+    const seen = new Set();
+    return tracks.reduce((albums, track) => {
+      const name = String(track.collectionName || '').trim();
+      if (!name) return albums;
+      const key = String(track.collectionId || `${track.artistName}:${name}`).toLowerCase();
+      if (seen.has(key) || albums.length >= limit) return albums;
+      seen.add(key);
+      const collectionId = track.collectionId || `custom_album_${encodeURIComponent(`${track.artistName}:${name}`)}`;
+      this._customAlbums[collectionId] = { name, artistName: track.artistName || '', tracks: tracks.filter(t =>
+        collectionId === t.collectionId || (!t.collectionId && t.collectionName === name && t.artistName === track.artistName)
+      ) };
+      albums.push({
+        collectionId,
+        collectionName: name,
+        artistName: track.artistName || '',
+        artworkUrl: track.artworkUrl || track.artworkSmall || '',
+        artworkSmall: track.artworkSmall || track.artworkUrl || '',
+        trackCount: this._customAlbums[collectionId].tracks.length,
+        releaseDate: track.releaseDate || '',
+        genre: track.genre || '',
+        artistId: track.artistId || '',
+      });
+      return albums;
+    }, []);
   },
 
   async getTrackById(trackId) {
@@ -405,6 +457,12 @@ const API = {
     const cacheKey = `jtag_${tag}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
 
+    // The configured VPS owns production search; never fall through to
+    // Jamendo/proxy calls there.
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      return this.search(tag, limit);
+    }
+
     try {
       const jamendoUrl = `${CONFIG.JAMENDO_API}/tracks/?` +
         `client_id=${CONFIG.JAMENDO_KEY}&format=json` +
@@ -426,6 +484,18 @@ const API = {
   async searchArtists(term, limit = 10) {
     const cacheKey = `jartists_${term}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
+
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      try {
+        const tracks = this._cache[`search_${term}_24`] || await this.search(term, Math.max(limit * 4, 20));
+        const results = this._artistsFromTracks(tracks, limit);
+        this._cache[cacheKey] = results;
+        return results;
+      } catch (e) {
+        console.warn('[NexSon] API VPS artistes indisponible:', e.message);
+        return [];
+      }
+    }
     try {
       const jamendoUrl = `${CONFIG.JAMENDO_API}/artists/?` +
         `client_id=${CONFIG.JAMENDO_KEY}&format=json` +
@@ -449,6 +519,15 @@ const API = {
   async getArtistTopTracks(artistId, limit = 20) {
     const cacheKey = `jartist_top_${artistId}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      try {
+        const name = this._customArtists[artistId] || String(artistId || '').replace(/^custom_artist_/, '');
+        const tracks = await this._searchCustom(decodeURIComponent(name), limit);
+        const results = tracks.filter(t => !name || t.artistName.toLowerCase() === decodeURIComponent(name).toLowerCase());
+        this._cache[cacheKey] = results.length ? results : tracks;
+        return this._cache[cacheKey];
+      } catch (e) { return []; }
+    }
     try {
       const jId = String(artistId).replace('j_', '');
       const jamendoUrl = `${CONFIG.JAMENDO_API}/tracks/?` +
@@ -467,6 +546,21 @@ const API = {
   async getAlbumTracks(albumId) {
     const cacheKey = `jalbum_${albumId}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      const album = this._customAlbums[albumId];
+      if (album?.tracks?.length) {
+        this._cache[cacheKey] = album.tracks;
+        return album.tracks;
+      }
+      // A direct album route can be opened without a prior search. Query the
+      // VPS with its label rather than ever using the legacy Jamendo API.
+      try {
+        const name = String(albumId || '').replace(/^custom_album_/, '');
+        const tracks = await this._searchCustom(decodeURIComponent(name), 50);
+        this._cache[cacheKey] = tracks.filter(t => String(t.collectionId) === String(albumId));
+        return this._cache[cacheKey];
+      } catch (e) { return []; }
+    }
     try {
       const jId = String(albumId).replace('ja_', '');
       const jamendoUrl = `${CONFIG.JAMENDO_API}/tracks/?` +
@@ -487,6 +581,17 @@ const API = {
   async searchAlbums(term, limit = 10) {
     const cacheKey = `jalbums_${term}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      try {
+        const tracks = this._cache[`search_${term}_24`] || await this.search(term, Math.max(limit * 4, 20));
+        const results = this._albumsFromTracks(tracks, limit);
+        this._cache[cacheKey] = results;
+        return results;
+      } catch (e) {
+        console.warn('[NexSon] API VPS albums indisponible:', e.message);
+        return [];
+      }
+    }
     try {
       const jamendoUrl = `${CONFIG.JAMENDO_API}/albums/?` +
         `client_id=${CONFIG.JAMENDO_KEY}&format=json` +
@@ -513,6 +618,15 @@ const API = {
   async getArtistAlbums(artistId, limit = 10) {
     const cacheKey = `jartist_albums_${artistId}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      try {
+        const name = this._customArtists[artistId] || String(artistId || '').replace(/^custom_artist_/, '');
+        const tracks = await this._searchCustom(decodeURIComponent(name), Math.max(limit * 4, 20));
+        const results = this._albumsFromTracks(tracks.filter(t => !name || t.artistName.toLowerCase() === decodeURIComponent(name).toLowerCase()), limit);
+        this._cache[cacheKey] = results;
+        return results;
+      } catch (e) { return []; }
+    }
     try {
       const jId = String(artistId).replace('j_', '');
       const jamendoUrl = `${CONFIG.JAMENDO_API}/albums/?` +

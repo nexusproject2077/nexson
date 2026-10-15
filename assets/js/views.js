@@ -211,8 +211,12 @@ const Views = {
     const container = document.getElementById('search-results');
     if (!container) return;
 
-    const [songs, artists, albums] = await Promise.all([
-      API.searchSongs(query, 20),
+    // The VPS returns tracks.  Fetch it once, then let the API derive the
+    // artist and album sections from the cached authoritative response.
+    // 24 also covers the 6 album candidates below (6 × 4 tracks), keeping
+    // the whole search view to a single VPS request.
+    const songs = (await API.searchSongs(query, 24)).slice(0, 20);
+    const [artists, albums] = await Promise.all([
       API.searchArtists(query, 5),
       API.searchAlbums(query, 6),
     ]);
@@ -261,7 +265,7 @@ const Views = {
           <h3 style="font-size:20px;font-weight:800;margin-bottom:20px">Artistes</h3>
           <div class="cards-grid">
             ${artists.map(a => `
-              <div class="card card-artist" onclick="Router.navigate('artist', {id:${a.artistId}, name:'${UI.escape(a.artistName)}'})">
+              <div class="card card-artist" onclick="Router.navigate('artist', ${JSON.stringify({ id: a.artistId || '', name: a.artistName || '' }).replace(/\"/g, '&quot;')})">
                 <div class="card-cover">
                   <img src="${a.artworkUrl}" alt="${UI.escape(a.artistName)}" loading="lazy" onerror="this.style.display='none'">
                   <div class="card-play-btn" onclick="event.stopPropagation();Search.quick('${UI.escape(a.artistName)}')">
@@ -888,12 +892,12 @@ const Views = {
           </div>
           <div>
             <div class="track-title">${UI.escape(track.trackName)}</div>
-            <div class="track-artist" onclick="event.stopPropagation();Router.navigate('artist',{id:${track.artistId||0},name:'${UI.escape(track.artistName)}'})">
+            <div class="track-artist" onclick="event.stopPropagation();Router.navigate('artist',${JSON.stringify({ id: track.artistId || '', name: track.artistName || '' }).replace(/\"/g, '&quot;')})">
               ${UI.escape(track.artistName)}
             </div>
           </div>
         </div>
-        ${showAlbum ? `<div class="track-album" onclick="event.stopPropagation();Router.navigate('album',{id:${track.collectionId||0},name:'${UI.escape(track.collectionName)}',artist:'${UI.escape(track.artistName)}',artwork:'${track.artworkUrl}'})">
+        ${showAlbum ? `<div class="track-album" onclick="event.stopPropagation();Router.navigate('album',${JSON.stringify({ id: track.collectionId || '', name: track.collectionName || '', artist: track.artistName || '', artwork: track.artworkUrl || '' }).replace(/\"/g, '&quot;')})">
           ${UI.escape(track.collectionName || '')}
         </div>` : ''}
         <div class="track-duration">${dur}</div>
@@ -913,13 +917,13 @@ const Views = {
   _renderAlbumCard(album) {
     const year = album.releaseDate ? new Date(album.releaseDate).getFullYear() : '';
     return `
-      <div class="card" onclick="Router.navigate('album',{id:${album.collectionId},name:'${UI.escape(album.collectionName)}',artist:'${UI.escape(album.artistName)}',artwork:'${album.artworkUrl}'})">
+      <div class="card" onclick="Router.navigate('album',${JSON.stringify({ id: album.collectionId || '', name: album.collectionName || '', artist: album.artistName || '', artwork: album.artworkUrl || '' }).replace(/\"/g, '&quot;')})">
         <div class="card-cover">
           ${album.artworkUrl
             ? `<img src="${album.artworkUrl}" alt="${UI.escape(album.collectionName)}" loading="lazy">`
             : `<div class="card-cover-gradient"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg></div>`
           }
-          <div class="card-play-btn" onclick="event.stopPropagation();Router.navigate('album',{id:${album.collectionId},name:'${UI.escape(album.collectionName)}',artist:'${UI.escape(album.artistName)}',artwork:'${album.artworkUrl}'})">
+          <div class="card-play-btn" onclick="event.stopPropagation();Router.navigate('album',${JSON.stringify({ id: album.collectionId || '', name: album.collectionName || '', artist: album.artistName || '', artwork: album.artworkUrl || '' }).replace(/\"/g, '&quot;')})">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
           </div>
         </div>
