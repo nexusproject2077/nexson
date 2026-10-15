@@ -112,7 +112,7 @@ async function init() {
     `%c NexSon v${CONFIG.VERSION} `,
     'background:linear-gradient(135deg,#8b5cf6,#ec4899);color:white;padding:4px 16px;border-radius:20px;font-weight:bold;font-size:13px'
   );
-  console.log('%cPremium Music Streaming — Jamendo full tracks', 'color:#8b5cf6;font-size:12px');
+  console.log('%cPremium Music Streaming — NexSon VPS + YouTube Data API', 'color:#8b5cf6;font-size:12px');
 }
 
 window.addEventListener('DOMContentLoaded', init);
