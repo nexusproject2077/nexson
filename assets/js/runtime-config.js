@@ -1,6 +1,5 @@
 /* NexSon production runtime configuration.
-   Put the public HTTPS URL of the music service here after deploying it on the VPS.
-   Example:
-   window.NEXSON_MUSIC_API = 'https://music.example.com';
+   Public URL of the NexSon Music API hosted on the VPS.
+   Secrets stay server-side in server/.env.
 */
-window.NEXSON_MUSIC_API = window.NEXSON_MUSIC_API || '';
+window.NEXSON_MUSIC_API = 'https://api.mmi25b11.mmi-troyes.fr/music';
