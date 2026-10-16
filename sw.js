@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexson-shell-v1';
+const CACHE_NAME = 'nexson-shell-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -15,6 +15,9 @@ const APP_SHELL = [
   './assets/js/ui.js',
   './assets/js/router.js',
   './assets/js/app.js',
+  './assets/css/nexson-ui.css',
+  './assets/css/nexson-nowplaying.css',
+  './assets/js/nexson-ui.js',
   './assets/icons/nexson.svg'
 ];
 

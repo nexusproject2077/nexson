@@ -1,0 +1,459 @@
+/* ==========================================================================
+   NexSon — Couche design « Obsidian »  (nexson-ui.css)
+   Chargée APRÈS style.css : redéfinit l'identité visuelle et ajoute des
+   composants, sans jamais écraser la structure existante.
+   ========================================================================== */
+
+:root{
+  /* — Surfaces — */
+  --bg-base:#07080c;
+  --bg-surface:#0c0e14;
+  --bg-elevated:#12151d;
+  --bg-card:#0f121a;
+  --bg-hover:#171b25;
+  --bg-active:#1f2431;
+
+  /* — Accents : on recolore toute l'app via les tokens déjà utilisés — */
+  --purple-500:#7c5cff;
+  --purple-600:#6a49f2;
+  --purple-400:#a08cff;
+  --pink-500:#ff8a3d;
+  --pink-400:#ffa76b;
+  --blue-500:#4d7cff;
+  --green-500:#25d0a5;
+
+  --gradient-primary:linear-gradient(120deg,#7c5cff 0%,#4d7cff 62%,#25d0a5 120%);
+  --gradient-secondary:linear-gradient(120deg,#6a49f2,#4d7cff);
+  --gradient-bg:
+    radial-gradient(1200px 720px at 8% -12%, #191243 0%, transparent 58%),
+    radial-gradient(900px 620px at 102% -6%, #0b2033 0%, transparent 55%),
+    #07080c;
+
+  --text-primary:#f4f5f9;
+  --text-secondary:#9aa0b4;
+  --text-muted:#6a7288;
+  --text-disabled:#474e61;
+
+  --border-subtle:rgba(255,255,255,.07);
+  --border-medium:rgba(255,255,255,.13);
+  --border-active:rgba(124,92,255,.55);
+
+  --radius-sm:10px;
+  --radius-md:14px;
+  --radius-lg:20px;
+  --radius-xl:28px;
+
+  --shadow-sm:0 1px 2px rgba(0,0,0,.5);
+  --shadow-md:0 10px 30px rgba(0,0,0,.5);
+  --shadow-lg:0 24px 70px rgba(0,0,0,.62);
+  --shadow-glow:0 0 0 1px rgba(124,92,255,.32), 0 14px 44px -14px rgba(124,92,255,.55);
+
+  /* — Tokens propres à NexSon — */
+  --nx-accent:#7c5cff;
+  --nx-accent-soft:rgba(124,92,255,.16);
+  --nx-accent-warm:#ff8a3d;
+  --nx-ok:#25d0a5;
+  --nx-line:rgba(255,255,255,.07);
+  --nx-line-2:rgba(255,255,255,.14);
+  --nx-nav-h:66px;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+html{ -webkit-tap-highlight-color:transparent; }
+body{
+  background:var(--bg-base);
+  color:var(--text-primary);
+  font-feature-settings:"kern" 1,"liga" 1,"cv11" 1;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{ background:rgba(124,92,255,.35); color:#fff; }
+:focus{ outline:none; }
+:focus-visible{
+  outline:2px solid var(--nx-accent);
+  outline-offset:2px;
+  border-radius:6px;
+}
+.app, .auth-screen{ background:var(--gradient-bg); background-attachment:fixed; }
+
+/* Barres de défilement discrètes et personnalisées */
+*{ scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.16) transparent; }
+::-webkit-scrollbar{ width:11px; height:11px; }
+::-webkit-scrollbar-track{ background:transparent; }
+::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.14);
+  border:3px solid transparent;
+  background-clip:content-box;
+  border-radius:99px;
+}
+::-webkit-scrollbar-thumb:hover{ background:rgba(255,255,255,.28); background-clip:content-box; }
+
+/* ── Marque : le mark dégradé des SVG inline ─────────────────────────── */
+#lg1 stop:first-child, #lg2 stop:first-child{ stop-color:#7c5cff; }
+#lg1 stop:last-child,  #lg2 stop:last-child { stop-color:#4d7cff; }
+
+.sidebar-brand span, .auth-brand-name{
+  font-family:'Poppins',sans-serif;
+  font-weight:800;
+  letter-spacing:-.02em;
+}
+.sidebar-brand{ border-radius:10px; }
+
+/* ── En-tête ─────────────────────────────────────────────────────────── */
+.topbar{
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  background:rgba(8,9,13,.72) !important;
+  border-bottom:1px solid var(--nx-line);
+}
+.topbar-search{
+  background:rgba(255,255,255,.05);
+  border:1px solid var(--nx-line);
+  transition:border-color var(--trans-fast), background var(--trans-fast), box-shadow var(--trans-fast);
+}
+.topbar-search:focus-within{
+  background:rgba(255,255,255,.08);
+  border-color:var(--border-active);
+  box-shadow:0 0 0 4px var(--nx-accent-soft);
+}
+
+/* ── Boutons icône : cible tactile et retour net ─────────────────────── */
+.btn-icon, .player-btn, .notif-btn, .track-more-btn, .track-like-btn{
+  transition:background var(--trans-fast), color var(--trans-fast), transform var(--trans-fast), opacity var(--trans-fast);
+}
+.btn-icon:active, .player-btn:active, .track-more-btn:active{ transform:scale(.92); }
+.btn-icon:hover, .player-btn:hover{ color:var(--text-primary); }
+
+/* ── Navigation latérale ─────────────────────────────────────────────── */
+.nav-item{
+  border-radius:12px;
+  font-weight:600;
+  letter-spacing:-.01em;
+  transition:background var(--trans-fast), color var(--trans-fast);
+}
+.nav-item:hover{ background:var(--bg-hover); }
+.nav-item.active{ background:var(--bg-active); color:var(--text-primary); }
+.nav-item.active svg{ color:var(--nx-accent); }
+.sidebar, .side-panel{
+  background:rgba(10,12,17,.86) !important;
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border-right:1px solid var(--nx-line);
+}
+.side-panel{ border-left:1px solid var(--nx-line); border-right:0; }
+
+/* ── Cartes : le socle visuel de l'app ───────────────────────────────── */
+.card{
+  background:var(--bg-card);
+  border:1px solid var(--nx-line);
+  border-radius:var(--radius-md);
+  padding:12px;
+  transition:background var(--trans-med), border-color var(--trans-med), transform var(--trans-med);
+}
+.card:hover{
+  background:var(--bg-hover);
+  border-color:var(--nx-line-2);
+  transform:translateY(-2px);
+}
+.card-cover{
+  border-radius:var(--radius-sm);
+  overflow:hidden;
+  background:linear-gradient(145deg,#1a1f2c,#101319);
+  box-shadow:var(--shadow-sm);
+  position:relative;
+}
+.card-cover img{ transition:transform .5s var(--ease-smooth); }
+.card:hover .card-cover img{ transform:scale(1.045); }
+.card-title{ font-weight:600; letter-spacing:-.01em; }
+.card-play-btn{
+  background:var(--nx-accent);
+  color:#fff;
+  box-shadow:0 8px 22px -6px rgba(124,92,255,.75);
+  transition:transform var(--trans-med) var(--ease-bounce), opacity var(--trans-med);
+}
+.card:hover .card-play-btn{ transform:translateY(-2px) scale(1.04); }
+
+/* ── Listes de titres ────────────────────────────────────────────────── */
+.track-item{
+  border-radius:10px;
+  transition:background var(--trans-fast);
+}
+.track-item:hover{ background:var(--bg-hover); }
+.track-item.playing{ background:var(--nx-accent-soft); }
+.track-item.playing .track-title{ color:var(--nx-accent); font-weight:600; }
+.now-playing-bars span{ background:var(--nx-accent); }
+.track-cover img{ border-radius:6px; }
+.track-artist:hover{ color:var(--text-primary); text-decoration:underline; }
+.track-list-header{
+  border-bottom:1px solid var(--nx-line);
+  text-transform:uppercase;
+  font-size:11px;
+  letter-spacing:.1em;
+  font-weight:700;
+  color:var(--text-muted);
+}
+
+/* ── Barre de lecture ────────────────────────────────────────────────── */
+.player-bar{
+  background:rgba(9,10,15,.9) !important;
+  backdrop-filter:blur(24px) saturate(150%);
+  -webkit-backdrop-filter:blur(24px) saturate(150%);
+  border-top:1px solid var(--nx-line);
+}
+.player-cover{
+  border-radius:8px;
+  overflow:hidden;
+  background:linear-gradient(145deg,#1a1f2c,#101319);
+}
+.player-cover img{ width:100%; height:100%; object-fit:cover; }
+.player-track-info{ min-width:0; }
+.player-track-name{
+  font-weight:600;
+  letter-spacing:-.01em;
+  cursor:pointer;
+  display:inline-block;
+  max-width:100%;
+}
+.player-track-name:hover{ text-decoration:underline; }
+.player-track-artist{ cursor:pointer; }
+.player-btn-play{
+  background:#fff;
+  color:#07080c;
+  box-shadow:0 6px 20px -6px rgba(0,0,0,.9);
+  transition:transform var(--trans-fast) var(--ease-bounce), box-shadow var(--trans-fast);
+}
+.player-btn-play:hover{ transform:scale(1.07); background:#fff; color:#07080c; }
+.player-btn-play:active{ transform:scale(.96); }
+.player-btn-play.loading{
+  background:transparent;
+  color:var(--text-primary);
+  box-shadow:none;
+}
+.progress-bar{
+  background:rgba(255,255,255,.12);
+  border-radius:99px;
+}
+.progress-fill{ background:var(--text-primary); border-radius:99px; }
+.progress-thumb{
+  background:#fff;
+  box-shadow:0 0 0 4px rgba(255,255,255,.12);
+  transition:transform var(--trans-fast), left .05s linear;
+}
+.progress-bar:hover .progress-thumb{ transform:scale(1.25); }
+.progress-bar:hover .progress-fill{ background:var(--nx-accent); }
+.volume-slider{ accent-color:var(--nx-accent); }
+.player-btn.active, .player-like-btn.liked{ color:var(--nx-accent); }
+
+/* Infobulle de survol de la barre de progression (posée par JS) */
+.nx-tip{
+  position:absolute;
+  bottom:calc(100% + 10px);
+  transform:translateX(-50%);
+  background:#0b0d13;
+  border:1px solid var(--nx-line-2);
+  color:var(--text-primary);
+  font-size:11px;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  padding:3px 7px;
+  border-radius:6px;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity var(--trans-fast);
+  white-space:nowrap;
+  z-index:5;
+}
+.nx-tip.show{ opacity:1; }
+
+/* ── Bouton « Agrandir » de la barre de lecture ──────────────────────── */
+.nx-expand-btn{ flex:0 0 auto; }
+.nx-expand-btn svg{ transition:transform var(--trans-med); }
+.nx-expand-btn:hover svg{ transform:scale(1.12); }
+
+/* ── Genres & affiches : moins de dégradé plat, plus de matière ──────── */
+.genre-card{
+  border:1px solid var(--nx-line);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+  isolation:isolate;
+}
+.genre-card::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg,transparent 35%,rgba(0,0,0,.42));
+  z-index:-1;
+}
+.genre-card:hover{ transform:translateY(-3px); border-color:var(--nx-line-2); }
+.hero-banner{
+  background:
+    radial-gradient(120% 160% at 88% 8%, rgba(255,138,61,.32) 0%, transparent 52%),
+    radial-gradient(120% 160% at 12% 96%, rgba(124,92,255,.55) 0%, transparent 58%),
+    linear-gradient(120deg,#141a2e,#0b0e17) !important;
+  border:1px solid var(--nx-line);
+  border-radius:var(--radius-lg);
+}
+.hero-title{ letter-spacing:-.03em; }
+.hero-tag{
+  background:rgba(255,255,255,.12);
+  border:1px solid var(--nx-line-2);
+  backdrop-filter:blur(8px);
+}
+
+/* ── Squelettes de chargement (au lieu du spinner seul) ──────────────── */
+.nx-skeleton{
+  position:relative;
+  overflow:hidden;
+  background:var(--bg-hover);
+  border-radius:var(--radius-sm);
+}
+.nx-skeleton::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent);
+  animation:nx-shimmer 1.5s infinite;
+}
+@keyframes nx-shimmer{ to{ transform:translateX(100%); } }
+.loading-state .spinner{
+  border-width:2px;
+  border-color:rgba(255,255,255,.14);
+  border-top-color:var(--nx-accent);
+}
+
+/* ── Jetons / chips ──────────────────────────────────────────────────── */
+.nx-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  height:34px;
+  padding:0 14px;
+  border-radius:99px;
+  border:1px solid var(--nx-line-2);
+  background:rgba(255,255,255,.04);
+  color:var(--text-secondary);
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background var(--trans-fast), color var(--trans-fast), border-color var(--trans-fast);
+}
+.nx-chip:hover{ background:rgba(255,255,255,.09); color:var(--text-primary); }
+.nx-chip.active{
+  background:var(--text-primary);
+  border-color:var(--text-primary);
+  color:#07080c;
+}
+.nx-chip svg{ width:15px; height:15px; }
+
+/* ── Menus contextuels / infobulles système ──────────────────────────── */
+.context-menu, .user-dropdown{
+  background:#0c0e14;
+  border:1px solid var(--nx-line-2);
+  border-radius:12px;
+  box-shadow:var(--shadow-lg);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+}
+.context-menu li, .user-dropdown a{ letter-spacing:-.01em; }
+.toast{
+  background:#0c0e14;
+  border:1px solid var(--nx-line-2);
+  border-radius:12px;
+  box-shadow:var(--shadow-lg);
+}
+.modal{
+  background:#0c0e14;
+  border:1px solid var(--nx-line-2);
+  border-radius:var(--radius-lg);
+}
+.btn-primary, .btn-auth{
+  background:var(--nx-accent);
+  border-radius:11px;
+  font-weight:600;
+  letter-spacing:-.01em;
+  box-shadow:0 10px 30px -12px rgba(124,92,255,.9);
+}
+.btn-primary:hover, .btn-auth:hover{ filter:brightness(1.08); }
+.btn-outline, .btn-secondary{ border-radius:11px; }
+
+/* ── Écran d'accueil : plus de profondeur ────────────────────────────── */
+.auth-card{
+  background:rgba(12,14,20,.82);
+  border:1px solid var(--nx-line-2);
+  border-radius:var(--radius-lg);
+  backdrop-filter:blur(24px);
+  -webkit-backdrop-filter:blur(24px);
+  box-shadow:var(--shadow-lg);
+}
+.auth-orb{ opacity:.4; filter:blur(70px); }
+.auth-orb-1{ background:#7c5cff; }
+.auth-orb-2{ background:#4d7cff; }
+.auth-orb-3{ background:#25d0a5; }
+.feature-icon{ color:var(--nx-accent); }
+
+/* ── Titres de vues ──────────────────────────────────────────────────── */
+.view-title{ letter-spacing:-.035em; }
+.section-title{ letter-spacing:-.015em; }
+.home-greeting h1{ letter-spacing:-.035em; font-weight:800; }
+
+/* ── Barre de navigation mobile (façon Spotify) ──────────────────────── */
+.nx-mobile-nav{
+  position:fixed;
+  left:0; right:0; bottom:0;
+  height:calc(var(--nx-nav-h) + env(safe-area-inset-bottom,0px));
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  display:none;
+  align-items:stretch;
+  background:rgba(8,9,13,.94);
+  backdrop-filter:blur(24px);
+  -webkit-backdrop-filter:blur(24px);
+  border-top:1px solid var(--nx-line);
+  z-index:60;
+}
+.nx-mobile-nav button{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  border:0;
+  background:none;
+  color:var(--text-muted);
+  font:inherit;
+  font-size:10.5px;
+  font-weight:600;
+  letter-spacing:.01em;
+  cursor:pointer;
+  transition:color var(--trans-fast);
+}
+.nx-mobile-nav button svg{ width:23px; height:23px; }
+.nx-mobile-nav button.active{ color:var(--text-primary); }
+.nx-mobile-nav button.active svg{ color:var(--nx-accent); }
+
+@media (max-width:640px){
+  .nx-mobile-nav{ display:flex; }
+  .player-bar{ bottom:calc(var(--nx-nav-h) + env(safe-area-inset-bottom,0px)) !important; }
+  .page-content{ padding-bottom:calc(var(--player-h) + var(--nx-nav-h) + 26px); }
+  .sidebar-toggle{ display:none !important; }
+}
+
+/* ── Petites polices : lisibilité des métadonnées ────────────────────── */
+.card-subtitle, .track-artist, .track-album, .player-track-artist{
+  letter-spacing:0;
+}
+.section-see-all{
+  font-weight:600;
+  letter-spacing:-.01em;
+  transition:color var(--trans-fast);
+}
+.section-see-all:hover{ color:var(--text-primary); text-decoration:underline; }
+
+/* ── Respect des préférences de mouvement ───────────────────────────── */
+@media (prefers-reduced-motion:reduce){
+  *, *::before, *::after{
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+  }
+}
