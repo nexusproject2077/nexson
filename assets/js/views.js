@@ -356,10 +356,16 @@ const Views = {
     content.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
         <h1 style="font-size:32px;font-weight:900">Bibliothèque</h1>
-        <button class="btn-primary" onclick="UI.showCreatePlaylist()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nouvelle playlist
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="btn-outline" onclick="UI.createPlaylistFolder()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
+            Dossier
+          </button>
+          <button class="btn-primary" onclick="UI.showCreatePlaylist()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nouvelle playlist
+          </button>
+        </div>
       </div>
 
       <div class="library-tabs">
@@ -400,7 +406,7 @@ const Views = {
                 </div>
               </div>
               <div class="card-title">${UI.escape(pl.name)}</div>
-              <div class="card-subtitle">${pl.tracks.length} titre${pl.tracks.length !== 1 ? 's' : ''}</div>
+              <div class="card-subtitle">${pl.folderId && Store.getFolder(pl.folderId) ? `${UI.escape(Store.getFolder(pl.folderId).name)} · ` : ''}${pl.tracks.length} titre${pl.tracks.length !== 1 ? 's' : ''}</div>
             </div>
           `).join('')}
         </div>
@@ -480,7 +486,7 @@ const Views = {
   },
 
   /* ══════════════════════════════ PLAYLIST ══ */
-  async renderPlaylist(id) {
+  async renderPlaylist(id, sort = 'position') {
     window._currentRoute = `playlist_${id}`;
     const content  = document.getElementById('page-content');
     const playlist = Store.getPlaylist(id);
@@ -490,7 +496,13 @@ const Views = {
     }
 
     const gradient = Playlists.getGradient(playlist);
-    const tracks   = playlist.tracks;
+    const tracks = [...playlist.tracks].sort((a, b) => {
+      if (sort === 'title') return (a.trackName || '').localeCompare(b.trackName || '', 'fr');
+      if (sort === 'artist') return (a.artistName || '').localeCompare(b.artistName || '', 'fr');
+      if (sort === 'album') return (a.collectionName || '').localeCompare(b.collectionName || '', 'fr');
+      if (sort === 'recent') return (b.addedAt || 0) - (a.addedAt || 0);
+      return 0;
+    });
 
     content.innerHTML = `
       <div class="view-header" style="background:linear-gradient(to bottom,${gradient}22,transparent);margin:-32px -32px 32px;padding:48px 32px 24px">
@@ -512,7 +524,7 @@ const Views = {
 
       <div class="view-actions">
         ${tracks.length ? `
-          <button class="btn-play-large" onclick="Views._playPlaylist('${id}')">
+          <button class="btn-play-large" onclick="Views._playPlaylistTracks(${JSON.stringify(tracks).replace(/"/g, '&quot;')})">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
           </button>
           <button class="btn-outline" onclick="Views._shufflePlaylistTracks(${JSON.stringify(tracks).replace(/"/g, '&quot;')})">
@@ -525,6 +537,16 @@ const Views = {
       </div>
 
       ${tracks.length ? `
+        <div class="playlist-sort-row">
+          <label for="playlist-sort">Trier les titres</label>
+          <select id="playlist-sort" class="sort-select" onchange="Views.renderPlaylist('${id}', this.value)">
+            <option value="position" ${sort === 'position' ? 'selected' : ''}>Ordre de la playlist</option>
+            <option value="title" ${sort === 'title' ? 'selected' : ''}>Titre, A à Z</option>
+            <option value="artist" ${sort === 'artist' ? 'selected' : ''}>Artiste, A à Z</option>
+            <option value="album" ${sort === 'album' ? 'selected' : ''}>Album, A à Z</option>
+            <option value="recent" ${sort === 'recent' ? 'selected' : ''}>Ajout récent</option>
+          </select>
+        </div>
         <div class="track-list-header"><span>#</span><span>Titre</span><span>Album</span><span>Durée</span><span></span></div>
         <div class="track-list" id="playlist-track-list">
           ${tracks.map((t, i) => this._renderTrackItem(t, tracks, i, true, id)).join('')}
@@ -822,6 +844,12 @@ const Views = {
           </div>
           <span style="color:var(--purple-400);font-size:13px;font-weight:600">Optimale</span>
         </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Raccourcis ordinateur</div>
+            <div class="settings-desc">Ctrl/Cmd+K : recherche · Ctrl/Cmd+flèches : navigation · Ctrl/Cmd+Maj+L : paroles · Ctrl/Cmd+Maj+J : file · Ctrl/Cmd+Maj+V : clip</div>
+          </div>
+        </div>
       </div>
 
       <div class="settings-card">
@@ -853,7 +881,7 @@ const Views = {
         <div class="settings-row">
           <div>
             <div class="settings-label">Musique fournie par</div>
-            <div class="settings-desc">Jamendo (titres complets), Lyrics.ovh</div>
+            <div class="settings-desc">NexSon Music Service, YouTube Data API, LRCLIB</div>
           </div>
         </div>
       </div>

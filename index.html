@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#0a0a12">
+  <meta name="application-name" content="NexSon">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.webmanifest">
   <title>NexSon – Premium Music Streaming</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%238b5cf6'/><stop offset='100%25' stop-color='%23ec4899'/></linearGradient></defs><circle cx='50' cy='50' r='45' fill='url(%23g)'/><path d='M35 65V35l30 15-30 15z' fill='white'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -385,6 +388,12 @@
       <div class="form-group">
         <label>Description (optionnel)</label>
         <textarea id="playlist-desc-input" placeholder="Décris ta playlist…" rows="3" maxlength="300"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Dossier</label>
+        <select id="playlist-folder-input" class="playlist-folder-select">
+          <option value="">Aucun dossier</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Visibilité</label>

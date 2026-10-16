@@ -1,0 +1,18 @@
+{
+  "name": "NexSon Music",
+  "short_name": "NexSon",
+  "description": "Lecteur musical NexSon avec clips, paroles et bibliothèque personnelle.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0a12",
+  "theme_color": "#0a0a12",
+  "icons": [
+    {
+      "src": "assets/icons/nexson.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

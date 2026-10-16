@@ -11,16 +11,19 @@ const Playlists = {
     const name       = document.getElementById('playlist-name-input').value.trim();
     const desc       = document.getElementById('playlist-desc-input').value.trim();
     const visibility = document.querySelector('input[name="playlist-visibility"]:checked')?.value || 'private';
+    const folderId   = document.getElementById('playlist-folder-input')?.value || '';
     const btn        = document.querySelector('#playlist-modal .btn-primary');
 
     if (!name) return UI.toast('Donne un nom à ta playlist', 'error');
 
     if (this._editingId) {
-      Store.updatePlaylist(this._editingId, { name, description: desc, visibility });
+      const editingId = this._editingId;
+      Store.updatePlaylist(editingId, { name, description: desc, visibility, folderId });
       UI.toast('Playlist mise à jour', 'success');
       this._editingId = null;
+      if (window._currentRoute === `playlist_${editingId}`) Views.renderPlaylist(editingId);
     } else {
-      const pl = Store.createPlaylist(name, desc, visibility);
+      const pl = Store.createPlaylist(name, desc, visibility, folderId);
       UI.toast(`Playlist "${name}" créée !`, 'success');
       // If there's a pending track to add
       if (this._pendingTrack) {
@@ -35,10 +38,6 @@ const Playlists = {
 
     // If on library page, refresh
     if (window._currentRoute === 'library') Views.renderLibrary();
-    if (window._currentRoute && window._currentRoute.startsWith('playlist_')) {
-      const id = window._currentRoute.split('_')[1];
-      if (id === this._editingId) Views.renderPlaylist(id);
-    }
   },
 
   /* ── Show add-to-playlist modal ── */

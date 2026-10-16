@@ -55,6 +55,7 @@ const UI = {
     document.getElementById('playlist-modal-title').textContent = 'Créer une playlist';
     document.getElementById('playlist-name-input').value = '';
     document.getElementById('playlist-desc-input').value = '';
+    this.populatePlaylistFolderOptions('');
     document.querySelector('#playlist-modal .btn-primary').textContent = 'Créer';
     const vis = document.querySelector('input[name="playlist-visibility"][value="private"]');
     if (vis) vis.checked = true;
@@ -69,11 +70,47 @@ const UI = {
     document.getElementById('playlist-modal-title').textContent = 'Modifier la playlist';
     document.getElementById('playlist-name-input').value = pl.name;
     document.getElementById('playlist-desc-input').value = pl.description || '';
+    this.populatePlaylistFolderOptions(pl.folderId || '');
     document.querySelector('#playlist-modal .btn-primary').textContent = 'Enregistrer';
     const vis = document.querySelector(`input[name="playlist-visibility"][value="${pl.visibility}"]`);
     if (vis) vis.checked = true;
     this.openModal('playlist-modal');
     setTimeout(() => document.getElementById('playlist-name-input')?.focus(), 100);
+  },
+
+  populatePlaylistFolderOptions(selectedId = '') {
+    const select = document.getElementById('playlist-folder-input');
+    if (!select) return;
+    const folders = Store.getFolders();
+    const byParent = parentId => folders
+      .filter(folder => (folder.parentId || '') === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    const options = [];
+    const visit = (parentId = '', depth = 0) => byParent(parentId).forEach(folder => {
+      options.push(`<option value="${folder.id}">${'— '.repeat(depth)}${UI.escape(folder.name)}</option>`);
+      visit(folder.id, depth + 1);
+    });
+    select.innerHTML = `<option value="">Aucun dossier</option>${options.join('')}`;
+    select.value = selectedId || '';
+  },
+
+  createPlaylistFolder(parentId = '') {
+    const parent = parentId ? Store.getFolder(parentId) : null;
+    const name = prompt(parent ? `Nom du sous-dossier dans « ${parent.name} » :` : 'Nom du dossier :');
+    if (!name?.trim()) return;
+    Store.createFolder(name.trim(), parentId);
+    this.renderSidebarPlaylists();
+    if (window._currentRoute === 'library') Views.renderLibrary();
+    UI.toast('Dossier créé', 'success');
+  },
+
+  deletePlaylistFolder(id) {
+    const folder = Store.getFolder(id);
+    if (!folder || !confirm(`Supprimer le dossier « ${folder.name} » ? Les playlists resteront disponibles.`)) return;
+    Store.deleteFolder(id);
+    this.renderSidebarPlaylists();
+    if (window._currentRoute === 'library') Views.renderLibrary();
+    UI.toast('Dossier supprimé', 'info');
   },
 
   /* ── Context Menu ── */
@@ -252,8 +289,9 @@ const UI = {
     const container = document.getElementById('sidebar-playlists');
     if (!container) return;
     const playlists = Store.getPlaylists();
+    const folders = Store.getFolders();
 
-    if (!playlists.length) {
+    if (!playlists.length && !folders.length) {
       container.innerHTML = `
         <div style="padding:12px 14px;color:var(--text-muted);font-size:13px">
           Aucune playlist encore. Crée-en une !
@@ -261,7 +299,7 @@ const UI = {
       return;
     }
 
-    container.innerHTML = playlists.map(pl => `
+    const playlistRow = pl => `
       <div class="playlist-item-sidebar ${window._currentRoute === 'playlist_' + pl.id ? 'active' : ''}"
            onclick="Router.navigate('playlist',{id:'${pl.id}'})">
         <div class="pl-icon">
@@ -274,7 +312,40 @@ const UI = {
           <div class="pl-name-meta">${pl.tracks.length} titre${pl.tracks.length !== 1 ? 's' : ''}</div>
         </div>
       </div>
+    `;
+    const byParent = parentId => folders
+      .filter(folder => (folder.parentId || '') === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    const playlistRows = parentId => playlists
+      .filter(playlist => (playlist.folderId || '') === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+      .map(playlistRow).join('');
+    const folderTree = (parentId = '', depth = 0) => byParent(parentId).map(folder => `
+      <div class="playlist-folder" style="--folder-indent:${depth * 10}px">
+        <div class="playlist-folder-row">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span>${UI.escape(folder.name)}</span>
+          <button class="folder-action" onclick="event.stopPropagation();UI.createPlaylistFolder('${folder.id}')" title="Créer un sous-dossier" aria-label="Créer un sous-dossier">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="folder-action" onclick="event.stopPropagation();UI.deletePlaylistFolder('${folder.id}')" title="Supprimer le dossier" aria-label="Supprimer le dossier">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+          </button>
+        </div>
+        <div class="playlist-folder-content">
+          ${playlistRows(folder.id)}
+          ${folderTree(folder.id, depth + 1)}
+        </div>
+      </div>
     `).join('');
+    container.innerHTML = `
+      ${playlistRows('')}
+      ${folderTree()}
+      <button class="playlist-folder-create" onclick="UI.createPlaylistFolder()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
+        Nouveau dossier
+      </button>
+    `;
   },
 
   /* ── Toggle notifications (demo) ── */

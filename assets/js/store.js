@@ -9,6 +9,7 @@ const Store = {
     USERS:          'nexson_users',
     LIKED:          'nexson_liked',
     PLAYLISTS:      'nexson_playlists',
+    FOLDERS:        'nexson_playlist_folders',
     RECENT:         'nexson_recent',
     QUEUE:          'nexson_queue',
     QUEUE_IDX:      'nexson_queue_idx',
@@ -70,7 +71,7 @@ const Store = {
   getPlaylists()    { return this._get(this.KEYS.PLAYLISTS, []); },
   savePlaylists(p)  { this._set(this.KEYS.PLAYLISTS, p); },
   getPlaylist(id)   { return this.getPlaylists().find(p => p.id === id) || null; },
-  createPlaylist(name, desc = '', visibility = 'private') {
+  createPlaylist(name, desc = '', visibility = 'private', folderId = '') {
     const playlists = this.getPlaylists();
     const colors = PLAYLIST_COLORS[Math.floor(Math.random() * PLAYLIST_COLORS.length)];
     const pl = {
@@ -78,6 +79,7 @@ const Store = {
       name,
       description: desc,
       visibility,
+      folderId:     folderId || '',
       colors,
       tracks:     [],
       createdAt:  Date.now(),
@@ -101,6 +103,38 @@ const Store = {
     let playlists = this.getPlaylists();
     playlists = playlists.filter(p => p.id !== id);
     this._set(this.KEYS.PLAYLISTS, playlists);
+  },
+  getFolders() { return this._get(this.KEYS.FOLDERS, []); },
+  saveFolders(folders) { this._set(this.KEYS.FOLDERS, folders); },
+  getFolder(id) { return this.getFolders().find(folder => folder.id === id) || null; },
+  createFolder(name, parentId = '') {
+    const folders = this.getFolders();
+    const folder = { id: `folder_${Date.now()}`, name, parentId: parentId || '', createdAt: Date.now() };
+    folders.push(folder);
+    this.saveFolders(folders);
+    return folder;
+  },
+  deleteFolder(id) {
+    const folders = this.getFolders();
+    const folder = folders.find(item => item.id === id);
+    if (!folder) return false;
+    const descendantIds = new Set([id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      folders.forEach(item => {
+        if (descendantIds.has(item.parentId) && !descendantIds.has(item.id)) {
+          descendantIds.add(item.id);
+          changed = true;
+        }
+      });
+    }
+    const playlists = this.getPlaylists().map(playlist =>
+      descendantIds.has(playlist.folderId) ? { ...playlist, folderId: folder.parentId || '' } : playlist
+    );
+    this.savePlaylists(playlists);
+    this.saveFolders(folders.filter(item => !descendantIds.has(item.id)));
+    return true;
   },
   addToPlaylist(playlistId, track) {
     const playlists = this.getPlaylists();

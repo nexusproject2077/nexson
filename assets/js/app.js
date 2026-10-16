@@ -82,6 +82,12 @@ document.addEventListener('contextmenu', (e) => {
 
 /* ── Initialize Application ── */
 async function init() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(error => {
+      console.warn('[NexSon] Service worker unavailable:', error);
+    });
+  }
+
   // Init player
   Player.init();
 
@@ -106,6 +112,18 @@ async function init() {
         }
       }, 100);
     }
+  });
+
+  // Desktop shortcuts, without stealing keys while the user is typing.
+  document.addEventListener('keydown', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+    if (!(e.ctrlKey || e.metaKey)) return;
+
+    if (e.key === 'ArrowLeft') { e.preventDefault(); Router.back(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); Router.forward(); }
+    if (e.shiftKey && e.key.toLowerCase() === 'l') { e.preventDefault(); UI.toggleLyricsPanel(); }
+    if (e.shiftKey && e.key.toLowerCase() === 'j') { e.preventDefault(); UI.toggleQueue(); }
+    if (e.shiftKey && e.key.toLowerCase() === 'v') { e.preventDefault(); Player.toggleVideo(); }
   });
 
   console.log(
