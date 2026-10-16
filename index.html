@@ -292,7 +292,11 @@
       </div>
       <div class="player-progress">
         <span class="player-time" id="current-time">0:00</span>
-        <div class="progress-bar" id="progress-bar" onclick="Player.seek(event)">
+        <div class="progress-bar" id="progress-bar" role="slider" tabindex="0"
+             aria-label="Position dans le titre" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"
+             onpointerdown="Player.beginSeek(event)" onpointermove="Player.moveSeek(event)"
+             onpointerup="Player.endSeek(event)" onpointercancel="Player.cancelSeek(event)"
+             onkeydown="Player.seekWithKeyboard(event)">
           <div class="progress-fill" id="progress-fill" style="width:0%"></div>
           <div class="progress-thumb" id="progress-thumb" style="left:0%"></div>
         </div>

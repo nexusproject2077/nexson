@@ -606,6 +606,15 @@ img { display: block; max-width: 100%; }
   display: flex; flex-direction: column; align-items: center; gap: 16px;
   padding: 40px 20px; color: var(--text-muted);
 }
+.lyrics-synced { display: grid; gap: 3px; padding-bottom: 16px; }
+.lyrics-line {
+  width: 100%; padding: 9px 10px; border-radius: 8px; text-align: left;
+  color: var(--text-muted); font-size: 15px; line-height: 1.55;
+  transition: var(--trans-fast);
+}
+.lyrics-line:hover, .lyrics-line:focus-visible { color: var(--text-primary); background: var(--bg-hover); outline: none; }
+.lyrics-line.active { color: var(--text-primary); background: rgba(139,92,246,.18); font-weight: 700; }
+.lyrics-source { margin-top: 18px; color: var(--text-muted); font-size: 11px; text-align: center; }
 
 /* ══════════════════════════════════════════════
    PLAYER BAR
@@ -695,6 +704,7 @@ img { display: block; max-width: 100%; }
   flex: 1; height: 4px; background: var(--bg-hover);
   border-radius: 2px; cursor: pointer; position: relative;
   transition: height var(--trans-fast);
+  touch-action: none;
 }
 .progress-bar:hover { height: 6px; }
 .progress-fill {
@@ -709,6 +719,8 @@ img { display: block; max-width: 100%; }
   transition: opacity var(--trans-fast);
 }
 .progress-bar:hover .progress-thumb { opacity: 1; }
+.progress-bar:focus-visible { outline: 2px solid var(--purple-400); outline-offset: 4px; }
+.progress-bar:active .progress-thumb, .progress-bar:focus-visible .progress-thumb { opacity: 1; }
 
 /* Extra controls */
 .player-extra {
@@ -975,6 +987,18 @@ img { display: block; max-width: 100%; }
   margin-bottom: 4px;
 }
 .home-greeting p { color: var(--text-muted); font-size: 15px; }
+.activity-bar { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 16px; margin: -6px 0 16px; scrollbar-width: none; }
+.activity-bar::-webkit-scrollbar { display: none; }
+.activity-chip, .radio-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border-medium); color: var(--text-secondary); background: var(--bg-elevated); transition: var(--trans-fast); }
+.activity-chip { min-height: 38px; padding: 0 14px; border-radius: var(--radius-full); font-size: 13px; font-weight: 700; }
+.activity-chip svg { width: 16px; height: 16px; flex-shrink: 0; }
+.activity-chip:hover, .activity-chip.active { border-color: rgba(167,139,250,.65); color: var(--text-primary); background: rgba(139,92,246,.2); }
+.home-radio { margin-bottom: 38px; }
+.radio-list { display: flex; gap: 10px; overflow-x: auto; padding: 2px 0 5px; scrollbar-width: none; }
+.radio-list::-webkit-scrollbar { display: none; }
+.radio-chip { max-width: 190px; padding: 7px 11px 7px 7px; border-radius: var(--radius-full); text-align: left; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.radio-chip:hover { border-color: var(--purple-400); color: var(--text-primary); }
+.radio-avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 28px; background: var(--gradient-primary); color: white; font-size: 12px; }
 
 /* Hero Banner */
 .hero-banner {
@@ -1632,6 +1656,28 @@ img { display: block; max-width: 100%; }
   .quick-access { grid-template-columns: 1fr; }
   .player-cover { width: 42px; height: 42px; }
   .home-greeting h1 { font-size: 20px; }
+}
+
+/* Long metadata must remain readable on every viewport. */
+.card, .track-item, .quick-item, .player-track, .track-info-cell { min-width: 0; }
+.card-title, .card-subtitle, .quick-item-name, .track-title, .track-artist,
+.player-track-name, .player-track-artist, .top-result-name, .top-result-type {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.card-title, .card-subtitle, .quick-item-name, .track-title, .track-artist,
+.player-track-name, .player-track-artist { white-space: normal; text-overflow: clip; overflow: visible; }
+.card-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.track-info-cell > div:last-child { min-width: 0; }
+@media (max-width: 640px) {
+  .activity-bar { margin-bottom: 10px; padding-bottom: 10px; }
+  .activity-chip { min-height: 36px; padding-inline: 12px; }
+  .radio-chip { max-width: 150px; }
+  .track-item { align-items: center; }
+  .track-title { font-size: 13px; line-height: 1.25; }
+  .track-artist { font-size: 11px; line-height: 1.25; }
+  .player-track-info { min-width: 0; }
+  .player-track-name, .player-track-artist { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; }
 }
 /* ══════════════════════════════════════════════
    RESPONSIVE HARDENING — iOS / MOBILE / SMALL VIEWPORTS

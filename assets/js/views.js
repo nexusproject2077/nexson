@@ -10,15 +10,41 @@ const Views = {
     const hour    = new Date().getHours();
     const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
     const user    = Store.getUser();
+    const activity = this._homeActivity || 'all';
+    const contexts = {
+      all: { label: 'Pour toi', query: 'popular music', subtitle: 'Des sélections basées sur tes écoutes récentes' },
+      sport: { label: 'Sport', query: 'workout energy', subtitle: 'Du rythme pour rester en mouvement' },
+      focus: { label: 'Concentration', query: 'focus instrumental', subtitle: 'Une ambiance calme pour avancer' },
+      relax: { label: 'Détente', query: 'relax chill', subtitle: 'Ralentis, prends le temps' },
+      commute: { label: 'Trajet', query: 'daily commute hits', subtitle: 'Des titres pour accompagner le trajet' },
+    };
+    const context = contexts[activity];
 
     content.innerHTML = `
       <div class="home-greeting">
         <h1>${greeting}${user ? ', ' + user.name.split(' ')[0] : ''} !</h1>
-        <p>Découvrez de nouvelles musiques et retrouvez vos favoris</p>
+        <p>${context.subtitle}</p>
+      </div>
+
+      <div class="activity-bar" aria-label="Choisir une ambiance">
+        ${[
+          ['all', 'Pour toi', '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>'],
+          ['sport', 'Sport', '<path d="M6 7h3v10H6zM15 7h3v10h-3z"/><path d="M3 10h3M18 10h3"/>'],
+          ['focus', 'Concentration', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'],
+          ['relax', 'Détente', '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'],
+          ['commute', 'Trajet', '<path d="M3 16h18"/><path d="M5 16V8l3-3h8l3 3v8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>'],
+        ].map(([id, label, icon]) => `<button class="activity-chip ${activity === id ? 'active' : ''}" onclick="Views.setHomeActivity('${id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icon}</svg>${label}</button>`).join('')}
       </div>
 
       <!-- Quick access: recently played -->
       <div id="quick-access-section"></div>
+
+      <div class="home-radio section-block">
+        <div class="section-header">
+          <span class="section-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v2M21 12h-2M12 21v-2M3 12h2"/></svg>Radio rapide</span>
+        </div>
+        <div class="radio-list">${FEATURED_ARTISTS.slice(0, 6).map(name => `<button class="radio-chip" onclick="Search.quick('${name.replace(/'/g, "\\'")} radio')"><span class="radio-avatar">${UI.escape(name.charAt(0))}</span><span>Radio ${UI.escape(name)}</span></button>`).join('')}</div>
+      </div>
 
       <!-- Hero Banner -->
       <div class="hero-banner" onclick="Router.navigate('search')">
@@ -41,9 +67,9 @@ const Views = {
         <div class="section-header">
           <span class="section-title">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            Top Hits
+            ${context.label}
           </span>
-          <span class="section-see-all" onclick="Search.quick('pop hits')">Voir tout</span>
+          <span class="section-see-all" onclick="Search.quick('${context.query}')">Voir tout</span>
         </div>
         <div class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
       </div>
@@ -62,7 +88,7 @@ const Views = {
         <div class="section-header">
           <span class="section-title">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            Chill Vibes
+            Mix détente
           </span>
           <span class="section-see-all" onclick="Search.quick('chillout ambient')">Voir tout</span>
         </div>
@@ -83,7 +109,7 @@ const Views = {
         <div class="section-header">
           <span class="section-title">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-15 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(15 12 12)"/></svg>
-            Afrobeats & RnB
+            Nouveautés pour vous
           </span>
           <span class="section-see-all" onclick="Search.quick('afrobeats')">Voir tout</span>
         </div>
@@ -94,7 +120,7 @@ const Views = {
         <div class="section-header">
           <span class="section-title">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-            Rap & Hip-Hop
+            Mix énergie
           </span>
           <span class="section-see-all" onclick="Search.quick('hip hop')">Voir tout</span>
         </div>
@@ -109,10 +135,15 @@ const Views = {
     this._renderHomeRecent();
 
     // Load music async
-    this._loadHomeSection('home-top-hits', 'top hits', 8);
+    this._loadHomeSection('home-top-hits', context.query, 8);
     this._loadHomeSection('home-chill', 'lofi chill', 8);
-    this._loadHomeSection('home-afro', 'afrobeats', 8);
-    this._loadHomeSection('home-rap', 'hip hop rap', 8);
+    this._loadHomeSection('home-afro', 'new music releases', 8);
+    this._loadHomeSection('home-rap', 'energy mix', 8);
+  },
+
+  setHomeActivity(activity) {
+    this._homeActivity = activity;
+    this.renderHome();
   },
 
   _renderGenresGrid() {
@@ -956,6 +987,35 @@ const Views = {
 
 /* ─── Lyrics Module ─── */
 const Lyrics = {
+  _lines: [],
+
+  _parseSyncedLyrics(raw = '') {
+    return raw.split(/\r?\n/).flatMap(line => {
+      const text = line.replace(/(?:\[\d{1,2}:\d{2}(?:\.\d{1,3})?\])+/g, '').trim();
+      const stamps = [...line.matchAll(/\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)\]/g)];
+      return stamps.map(match => ({ time: Number(match[1]) * 60 + Number(match[2]), text }));
+    }).filter(line => line.text).sort((a, b) => a.time - b.time);
+  },
+
+  sync(currentTime) {
+    if (!this._lines.length) return;
+    let active = -1;
+    for (let i = 0; i < this._lines.length; i++) {
+      if (this._lines[i].time <= currentTime) active = i;
+      else break;
+    }
+    const next = document.querySelector(`.lyrics-line[data-line="${active}"]`);
+    if (!next || next.classList.contains('active')) return;
+    document.querySelectorAll('.lyrics-line.active').forEach(line => line.classList.remove('active'));
+    next.classList.add('active');
+    next.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  },
+
+  seekToLine(index) {
+    const line = this._lines[index];
+    if (line && Player.audio) Player.audio.currentTime = line.time;
+  },
+
   async loadForTrack(track) {
     const panel = document.getElementById('lyrics-content');
     if (!panel) return;
@@ -973,19 +1033,27 @@ const Lyrics = {
       </div>
     `;
 
-    const lyrics = await API.getLyrics(track.artistName, track.trackName);
+    const lyrics = await API.getLyrics(track.artistName, track.trackName, track.collectionName, track.duration);
 
     if (lyrics) {
+      this._lines = this._parseSyncedLyrics(lyrics.synced);
+      const body = this._lines.length
+        ? `<div class="lyrics-synced">${this._lines.map((line, index) =>
+            `<button class="lyrics-line" data-line="${index}" onclick="Lyrics.seekToLine(${index})">${UI.escape(line.text)}</button>`
+          ).join('')}</div>`
+        : `<div class="lyrics-text">${UI.escape(lyrics.plain)}</div>`;
       panel.innerHTML = `
         <div class="lyrics-content">
           <div class="lyrics-track-info">
             <div class="lyrics-title">${UI.escape(track.trackName)}</div>
             <div class="lyrics-artist">${UI.escape(track.artistName)}</div>
           </div>
-          <div class="lyrics-text">${UI.escape(lyrics)}</div>
+          ${body}
+          <div class="lyrics-source">Paroles fournies gratuitement par ${lyrics.source}</div>
         </div>
       `;
     } else {
+      this._lines = [];
       panel.innerHTML = `
         <div class="lyrics-content">
           <div class="lyrics-track-info">

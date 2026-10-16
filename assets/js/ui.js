@@ -151,7 +151,7 @@ const UI = {
     if (playerLike && Player.currentTrack()?.trackId === track.trackId) {
       playerLike.classList.toggle('liked', liked);
     }
-    UI.toast(liked ? '❤️ Ajouté aux titres aimés' : 'Retiré des titres aimés', liked ? 'success' : 'info');
+    UI.toast(liked ? 'Ajouté aux titres aimés' : 'Retiré des titres aimés', liked ? 'success' : 'info');
     if (window._currentRoute === 'liked') Views.renderLiked();
   },
 

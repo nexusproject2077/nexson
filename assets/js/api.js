@@ -709,18 +709,42 @@ const API = {
      LYRICS
   ══════════════════════════════════════════ */
 
-  async getLyrics(artist, title) {
-    const cacheKey = `lyrics_${artist}_${title}`;
+  async getLyrics(artist, title, album = '', duration = 0) {
+    const cacheKey = `lyrics_${artist}_${title}_${duration}`;
     if (this._cache[cacheKey] !== undefined) return this._cache[cacheKey];
+
+    // LRCLIB is a free, CORS-enabled source that can return timed LRC lyrics.
+    // Try the exact signature first, then a lightweight search fallback.
+    try {
+      const params = new URLSearchParams({ track_name: title, artist_name: artist });
+      if (album) params.set('album_name', album);
+      if (duration > 0) params.set('duration', String(Math.round(duration)));
+      const response = await fetch(`${CONFIG.LRCLIB_API}/get?${params}`, {
+        headers: { 'Lrclib-Client': 'NexSon/2.0 (https://nexusproject2077.github.io/nexson/)' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const lyrics = {
+          plain: data.plainLyrics || '',
+          synced: data.syncedLyrics || '',
+          source: 'LRCLIB',
+        };
+        if (lyrics.plain || lyrics.synced) return (this._cache[cacheKey] = lyrics);
+      }
+    } catch (_) {}
+
+    // Keep the previous free source as a fallback for tracks LRCLIB lacks.
     try {
       const url = `${CONFIG.LYRICS_API}/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`;
-      const resp = await fetch(url);
-      if (!resp.ok) { this._cache[cacheKey] = null; return null; }
-      const data = await resp.json();
-      const lyrics = data.lyrics || null;
-      this._cache[cacheKey] = lyrics;
-      return lyrics;
-    } catch (e) { this._cache[cacheKey] = null; return null; }
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.lyrics) return (this._cache[cacheKey] = { plain: data.lyrics, synced: '', source: 'Lyrics.ovh' });
+      }
+    } catch (_) {}
+
+    this._cache[cacheKey] = null;
+    return null;
   },
 
   /* ── Utilities ── */

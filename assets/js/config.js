@@ -10,6 +10,7 @@ const CONFIG = {
   JAMENDO_KEY: 'b6747d04',
   // Lyrics API
   LYRICS_API: 'https://api.lyrics.ovh/v1',
+  LRCLIB_API: 'https://lrclib.net/api',
   // Backend API (MongoDB auth) — set to your deployed URL or localhost
   API_BASE: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:3001'

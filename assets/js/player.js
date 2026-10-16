@@ -13,6 +13,8 @@ const Player = {
   _shuffleOrder: [],
   _progressInterval: null,
   _subscribers: new Set(),
+  _isSeeking: false,
+  _pendingSeek: 0,
 
   init() {
     this.audio    = document.getElementById('audio-player');
@@ -193,13 +195,61 @@ const Player = {
     if (window._currentRoute === 'liked') Views.renderLiked();
   },
 
-  /* ── Seek ── */
-  seek(e) {
+  /* ── Seek — pointer, touch and keyboard accessible ── */
+  _seekPercentFromPointer(e) {
     const bar  = document.getElementById('progress-bar');
-    if (!bar || !this.audio.duration) return;
+    if (!bar || !this.audio?.duration) return null;
     const rect = bar.getBoundingClientRect();
-    const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    this.audio.currentTime = pct * this.audio.duration;
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  },
+
+  _previewSeek(pct) {
+    const fill = document.getElementById('progress-fill');
+    const thumb = document.getElementById('progress-thumb');
+    if (fill) fill.style.width = `${pct * 100}%`;
+    if (thumb) thumb.style.left = `${pct * 100}%`;
+  },
+
+  beginSeek(e) {
+    const pct = this._seekPercentFromPointer(e);
+    if (pct === null) return;
+    e.preventDefault();
+    this._isSeeking = true;
+    this._pendingSeek = pct;
+    e.currentTarget?.setPointerCapture?.(e.pointerId);
+    this._previewSeek(pct);
+  },
+
+  moveSeek(e) {
+    if (!this._isSeeking) return;
+    const pct = this._seekPercentFromPointer(e);
+    if (pct === null) return;
+    this._pendingSeek = pct;
+    this._previewSeek(pct);
+  },
+
+  endSeek(e) {
+    if (!this._isSeeking) return;
+    const pct = this._seekPercentFromPointer(e);
+    const finalPct = pct === null ? this._pendingSeek : pct;
+    this._isSeeking = false;
+    this.audio.currentTime = finalPct * this.audio.duration;
+    e.currentTarget?.releasePointerCapture?.(e.pointerId);
+  },
+
+  cancelSeek() {
+    this._isSeeking = false;
+  },
+
+  seekWithKeyboard(e) {
+    if (!this.audio?.duration) return;
+    const direction = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 :
+      e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
+    if (!direction && e.key !== 'Home' && e.key !== 'End') return;
+    e.preventDefault();
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? this.audio.duration :
+      Math.max(0, Math.min(this.audio.duration, this.audio.currentTime + direction * 5));
+    this.audio.currentTime = next;
   },
 
   /* ── Volume ── */
@@ -366,14 +416,23 @@ const Player = {
     const fill  = document.getElementById('progress-fill');
     const thumb = document.getElementById('progress-thumb');
     const cur   = document.getElementById('current-time');
-    if (fill)  fill.style.width  = pct + '%';
-    if (thumb) thumb.style.left  = pct + '%';
+    if (!this._isSeeking) {
+      if (fill)  fill.style.width  = pct + '%';
+      if (thumb) thumb.style.left  = pct + '%';
+    }
     if (cur)   cur.textContent   = this._formatTime(currentTime);
 
     const total = document.getElementById('total-time');
     if (total && duration) total.textContent = this._formatTime(duration);
+    const bar = document.getElementById('progress-bar');
+    if (bar) {
+      bar.setAttribute('aria-valuemax', String(Math.round(duration)));
+      bar.setAttribute('aria-valuenow', String(Math.round(currentTime)));
+      bar.setAttribute('aria-valuetext', `${this._formatTime(currentTime)} sur ${this._formatTime(duration)}`);
+    }
 
     this._syncMediaPosition();
+    Lyrics.sync(currentTime);
     this._emitState('timeupdate');
   },
 
