@@ -9,11 +9,15 @@ Search metadata:
 Audio playback:
   yt-dlp resolves the media URL and this service proxies the audio stream.
 
+Video playback:
+  yt-dlp resolves a progressive video with its audio track for the in-app clip.
+
 Endpoints:
   GET /health
   GET /search?q=<term>&limit=25
   GET /tracks/<video_id>
   GET /tracks/<video_id>/stream
+  GET /tracks/<video_id>/video
   GET /stream?id=<video_id>
 """
 
@@ -119,6 +123,7 @@ def _normalize_youtube_video(video: dict) -> dict:
         "source": "youtube-data-api",
         "explicit": False,
         "streamEndpoint": f"/tracks/{video_id}/stream",
+        "videoEndpoint": f"/tracks/{video_id}/video",
     }
 
 
@@ -234,6 +239,7 @@ def _search_ytdlp(term: str, limit: int) -> list:
             "source": "youtube-ytdlp",
             "explicit": False,
             "streamEndpoint": f"/tracks/{video_id}/stream",
+            "videoEndpoint": f"/tracks/{video_id}/video",
         })
 
     return tracks
@@ -264,12 +270,40 @@ def _best_audio_url(info: dict) -> str:
     return max(formats, key=_audio_quality_score)["url"]
 
 
+def _video_quality_score(format_info: dict) -> tuple:
+    """Privilégie un clip progressif lisible directement dans le navigateur."""
+    extension = (format_info.get("ext") or "").lower()
+    height = min(int(format_info.get("height") or 0), 720)
+    return (
+        height,
+        format_info.get("fps") or 0,
+        format_info.get("tbr") or 0,
+        int(extension in {"mp4", "webm"}),
+    )
+
+
+def _best_video_url(info: dict) -> str:
+    """Extrait une vidéo avec sa piste audio, limitée à 720p pour le web."""
+    formats = [
+        format_info for format_info in info.get("formats", [])
+        if (
+            format_info.get("vcodec") not in {None, "none"}
+            and format_info.get("acodec") not in {None, "none"}
+            and format_info.get("url")
+            and (format_info.get("height") or 0) <= 720
+        )
+    ]
+    if not formats:
+        return ""
+    return max(formats, key=_video_quality_score)["url"]
+
+
 def _resolve_stream_url(video_id: str) -> str:
     """Retourne l'URL directe de la meilleure piste audio disponible (cache 1h)."""
     now = time.time()
 
     with _cache_lock:
-        entry = _url_cache.get(video_id)
+        entry = _url_cache.get(f"audio:{video_id}")
         if entry and entry["exp"] > now:
             return entry["url"]
 
@@ -301,7 +335,7 @@ def _resolve_stream_url(video_id: str) -> str:
 
     if url:
         with _cache_lock:
-            _url_cache[video_id] = {
+            _url_cache[f"audio:{video_id}"] = {
                 "url": url,
                 "exp": now + CACHE_TTL,
             }
@@ -309,12 +343,50 @@ def _resolve_stream_url(video_id: str) -> str:
     return url
 
 
-def _proxy_stream(video_id: str):
+def _resolve_video_url(video_id: str) -> str:
+    """Retourne un clip avec audio intégré, lisible dans l'élément video."""
+    now = time.time()
+    cache_key = f"video:{video_id}"
+
+    with _cache_lock:
+        entry = _url_cache.get(cache_key)
+        if entry and entry["exp"] > now:
+            return entry["url"]
+
+    ydl_opts = _with_youtube_cookies({
+        # Les formats adaptatifs vidéo seuls ne contiennent pas de son. On
+        # sélectionne donc un format progressif, jusqu'à 720p, qui rassemble
+        # image et audio dans un seul flux lisible par le navigateur.
+        "format": "best[acodec!=none][vcodec!=none][height<=720][ext=mp4]/best[acodec!=none][vcodec!=none][height<=720]",
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
+        "noplaylist": True,
+        "extractor_args": {
+            "youtube": {"player_client": ["default", "web_embedded"]},
+        },
+    })
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(
+            f"https://www.youtube.com/watch?v={video_id}",
+            download=False,
+        )
+        url = _best_video_url(info)
+
+    if url:
+        with _cache_lock:
+            _url_cache[cache_key] = {"url": url, "exp": now + CACHE_TTL}
+
+    return url
+
+
+def _proxy_stream(video_id: str, media_kind: str = "audio"):
     if not video_id:
         return jsonify({"error": "Paramètre id manquant"}), 400
 
     try:
-        media_url = _resolve_stream_url(video_id)
+        media_url = _resolve_video_url(video_id) if media_kind == "video" else _resolve_stream_url(video_id)
         if not media_url:
             return jsonify({"error": "Impossible de résoudre le flux"}), 404
 
@@ -338,7 +410,9 @@ def _proxy_stream(video_id: str):
         upstream.raise_for_status()
 
         response_headers = {
-            "Content-Type": upstream.headers.get("Content-Type", "audio/webm"),
+            "Content-Type": upstream.headers.get(
+                "Content-Type", "video/mp4" if media_kind == "video" else "audio/webm"
+            ),
             "Accept-Ranges": "bytes",
             "Cache-Control": "private, max-age=300",
         }
@@ -443,6 +517,12 @@ def track(video_id):
 def track_stream(video_id):
     clean_id = video_id.replace("yt_", "", 1).strip()
     return _proxy_stream(clean_id)
+
+
+@app.route("/tracks/<video_id>/video")
+def track_video(video_id):
+    clean_id = video_id.replace("yt_", "", 1).strip()
+    return _proxy_stream(clean_id, media_kind="video")
 
 
 @app.route("/stream")

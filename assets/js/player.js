@@ -4,6 +4,7 @@
 
 const Player = {
   audio:      null,
+  video:      null,
   queue:      [],
   queueIdx:   0,
   shuffle:    false,
@@ -15,15 +16,19 @@ const Player = {
   _subscribers: new Set(),
   _isSeeking: false,
   _pendingSeek: 0,
+  _videoMode: false,
+  _audioWasPlayingBeforeVideo: false,
 
   init() {
     this.audio    = document.getElementById('audio-player');
+    this.video    = document.getElementById('video-player');
     this.shuffle  = Store.getShuffle();
     this.repeat   = Store.getRepeat();
     const vol     = Store.getVolume();
 
     // Restore volume
     this.audio.volume = vol / 100;
+    if (this.video) this.video.volume = vol / 100;
     const slider = document.getElementById('volume-slider');
     if (slider) slider.value = vol;
 
@@ -54,6 +59,20 @@ const Player = {
     this.audio.addEventListener('durationchange', () => this._syncMediaPosition());
     this.audio.addEventListener('volumechange', () => this._emitState('volumechange'));
 
+    if (this.video) {
+      this.video.addEventListener('timeupdate', () => this._onTimeUpdate(this.video));
+      this.video.addEventListener('ended', () => this._onVideoEnded());
+      this.video.addEventListener('error', () => this._onError());
+      this.video.addEventListener('loadstart', () => this._onLoadStart());
+      this.video.addEventListener('canplay', () => this._onCanPlay(this.video));
+      this.video.addEventListener('play', () => { this.isPlaying = true; this._updatePlayUI(true); });
+      this.video.addEventListener('pause', () => { this.isPlaying = false; this._updatePlayUI(false); this._emitState('pause'); });
+      this.video.addEventListener('playing', () => { this._setLoading(false); this._emitState('playing'); });
+      this.video.addEventListener('waiting', () => this._setLoading(true));
+      this.video.addEventListener('stalled', () => this._setLoading(true));
+      this.video.addEventListener('durationchange', () => this._syncMediaPosition());
+    }
+
     this._initMediaSession();
 
     // Keyboard shortcuts
@@ -63,6 +82,7 @@ const Player = {
   /* ── Play a track ── */
   async playTrack(track, queue = null, idx = 0) {
     if (!track) return;
+    if (this._videoMode) this.closeVideo(false);
     if (queue) {
       this.queue    = queue;
       this.queueIdx = idx;
@@ -115,17 +135,96 @@ const Player = {
 
   /* ── Toggle play/pause ── */
   toggle() {
-    if (!this.audio.src) return;
-    if (this.isPlaying) this.audio.pause();
-    else this.audio.play();
+    const media = this._activeMedia();
+    if (!media?.src) return;
+    if (this.isPlaying) media.pause();
+    else media.play();
   },
 
   /* ── Stop ── */
   stop() {
+    if (this._videoMode) this.closeVideo(false);
     this.audio.pause();
     this.audio.src = '';
     this.isPlaying = false;
     this._updatePlayUI(false);
+  },
+
+  /* ── Clip vidéo ── */
+  async toggleVideo() {
+    if (this._videoMode) {
+      this.closeVideo(true);
+      return;
+    }
+
+    const track = this.currentTrack();
+    if (!track || !this.video) {
+      UI.toast('Lance un titre avant d’ouvrir son clip', 'info');
+      return;
+    }
+
+    const overlay = document.getElementById('video-overlay');
+    const title = document.getElementById('video-track-name');
+    const artist = document.getElementById('video-track-artist');
+    const startAt = this.audio.currentTime || 0;
+    this._audioWasPlayingBeforeVideo = !this.audio.paused;
+    this._videoMode = true;
+    this.audio.pause();
+    this.video.volume = this.audio.volume;
+    if (title) title.textContent = track.trackName || 'Clip vidéo';
+    if (artist) artist.textContent = track.artistName || '';
+    if (overlay) overlay.classList.remove('hidden');
+    this._updateVideoUI(true);
+    this._setLoading(true);
+
+    try {
+      const videoUrl = await API.resolveTrackVideo(track);
+      if (!this._videoMode) return;
+      this.video.src = videoUrl;
+      this.video.load();
+      this.video.addEventListener('loadedmetadata', () => {
+        if (!this._videoMode) return;
+        this.video.currentTime = Math.min(startAt, Math.max(0, (this.video.duration || startAt) - 0.1));
+        if (this._audioWasPlayingBeforeVideo) {
+          this.video.play().catch(() => UI.toast('Le clip ne peut pas démarrer automatiquement', 'info'));
+        }
+      }, { once: true });
+    } catch (e) {
+      console.error('[NexSon] Video resolve failed:', e.message);
+      this.closeVideo(true);
+      UI.toast('Clip indisponible pour ce titre', 'error');
+    }
+  },
+
+  closeVideo(resumeAudio = true) {
+    if (!this._videoMode) return;
+    const position = this.video?.currentTime || this.audio?.currentTime || 0;
+    const shouldResume = resumeAudio && (this._audioWasPlayingBeforeVideo || !this.video?.paused);
+    this._videoMode = false;
+    if (this.video) {
+      this.video.pause();
+      this.video.removeAttribute('src');
+      this.video.load();
+    }
+    const overlay = document.getElementById('video-overlay');
+    if (overlay) overlay.classList.add('hidden');
+    this._updateVideoUI(false);
+    if (this.audio) {
+      this.audio.currentTime = position;
+      if (shouldResume) this.audio.play().catch(() => {});
+    }
+  },
+
+  _updateVideoUI(active) {
+    document.querySelectorAll('[data-video-toggle]').forEach(button => {
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+      button.title = active ? 'Revenir à l’audio' : 'Basculer vers le clip';
+    });
+  },
+
+  _activeMedia() {
+    return this._videoMode && this.video ? this.video : this.audio;
   },
 
   /* ── Next track ── */
@@ -146,8 +245,9 @@ const Player = {
   prev() {
     if (!this.queue.length) return;
     // If more than 3 seconds in, restart current track
-    if (this.audio.currentTime > 3) {
-      this.audio.currentTime = 0;
+    const media = this._activeMedia();
+    if (media.currentTime > 3) {
+      media.currentTime = 0;
       return;
     }
     if (this.shuffle) {
@@ -198,7 +298,7 @@ const Player = {
   /* ── Seek — pointer, touch and keyboard accessible ── */
   _seekPercentFromPointer(e) {
     const bar  = document.getElementById('progress-bar');
-    if (!bar || !this.audio?.duration) return null;
+    if (!bar || !this._activeMedia()?.duration) return null;
     const rect = bar.getBoundingClientRect();
     return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   },
@@ -233,7 +333,8 @@ const Player = {
     const pct = this._seekPercentFromPointer(e);
     const finalPct = pct === null ? this._pendingSeek : pct;
     this._isSeeking = false;
-    this.audio.currentTime = finalPct * this.audio.duration;
+    const media = this._activeMedia();
+    media.currentTime = finalPct * media.duration;
     e.currentTarget?.releasePointerCapture?.(e.pointerId);
   },
 
@@ -242,20 +343,22 @@ const Player = {
   },
 
   seekWithKeyboard(e) {
-    if (!this.audio?.duration) return;
+    const media = this._activeMedia();
+    if (!media?.duration) return;
     const direction = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 :
       e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
     if (!direction && e.key !== 'Home' && e.key !== 'End') return;
     e.preventDefault();
-    const next = e.key === 'Home' ? 0 : e.key === 'End' ? this.audio.duration :
-      Math.max(0, Math.min(this.audio.duration, this.audio.currentTime + direction * 5));
-    this.audio.currentTime = next;
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? media.duration :
+      Math.max(0, Math.min(media.duration, media.currentTime + direction * 5));
+    media.currentTime = next;
   },
 
   /* ── Volume ── */
   setVolume(val) {
     const v = parseInt(val);
     this.audio.volume = v / 100;
+    if (this.video) this.video.volume = v / 100;
     Store.setVolume(v);
     this.muted = v === 0;
     this._updateVolumeIcon(v);
@@ -265,12 +368,14 @@ const Player = {
     if (this.muted) {
       const v = Store.getVolume() || 80;
       this.audio.volume = v / 100;
+      if (this.video) this.video.volume = v / 100;
       const slider = document.getElementById('volume-slider');
       if (slider) slider.value = v;
       this.muted = false;
       this._updateVolumeIcon(v);
     } else {
       this.audio.volume = 0;
+      if (this.video) this.video.volume = 0;
       const slider = document.getElementById('volume-slider');
       if (slider) slider.value = 0;
       this.muted = true;
@@ -312,16 +417,18 @@ const Player = {
 
   /* ── Public player state — useful for any future API/UI integration ── */
   getState() {
+    const media = this._activeMedia();
     return {
       track: this.currentTrack(),
       queue: [...this.queue],
       queueIndex: this.queueIdx,
       playing: this.isPlaying,
       loading: document.getElementById('play-pause-btn')?.classList.contains('loading') || false,
-      currentTime: this.audio?.currentTime || 0,
-      duration: Number.isFinite(this.audio?.duration) ? this.audio.duration : 0,
-      volume: this.audio ? Math.round(this.audio.volume * 100) : 0,
+      currentTime: media?.currentTime || 0,
+      duration: Number.isFinite(media?.duration) ? media.duration : 0,
+      volume: media ? Math.round(media.volume * 100) : 0,
       muted: this.muted,
+      videoMode: this._videoMode,
       shuffle: this.shuffle,
       repeat: this.repeat,
     };
@@ -354,24 +461,27 @@ const Player = {
       try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) {}
     };
 
-    safeSet('play', () => this.audio?.play());
-    safeSet('pause', () => this.audio?.pause());
+    safeSet('play', () => this._activeMedia()?.play());
+    safeSet('pause', () => this._activeMedia()?.pause());
     safeSet('previoustrack', () => this.prev());
     safeSet('nexttrack', () => this.next());
     safeSet('seekbackward', details => {
-      if (!this.audio) return;
+      const media = this._activeMedia();
+      if (!media) return;
       const step = details.seekOffset || 10;
-      this.audio.currentTime = Math.max(0, this.audio.currentTime - step);
+      media.currentTime = Math.max(0, media.currentTime - step);
     });
     safeSet('seekforward', details => {
-      if (!this.audio) return;
+      const media = this._activeMedia();
+      if (!media) return;
       const step = details.seekOffset || 10;
-      const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : Infinity;
-      this.audio.currentTime = Math.min(duration, this.audio.currentTime + step);
+      const duration = Number.isFinite(media.duration) ? media.duration : Infinity;
+      media.currentTime = Math.min(duration, media.currentTime + step);
     });
     safeSet('seekto', details => {
-      if (!this.audio || typeof details.seekTime !== 'number') return;
-      this.audio.currentTime = details.seekTime;
+      const media = this._activeMedia();
+      if (!media || typeof details.seekTime !== 'number') return;
+      media.currentTime = details.seekTime;
     });
   },
 
@@ -394,22 +504,24 @@ const Player = {
   },
 
   _syncMediaPosition() {
-    if (!('mediaSession' in navigator) || !this.audio) return;
-    const duration = this.audio.duration;
+    const media = this._activeMedia();
+    if (!('mediaSession' in navigator) || !media) return;
+    const duration = media.duration;
     if (!Number.isFinite(duration) || duration <= 0) return;
 
     try {
       navigator.mediaSession.setPositionState({
         duration,
-        playbackRate: this.audio.playbackRate || 1,
-        position: Math.min(this.audio.currentTime || 0, duration),
+        playbackRate: media.playbackRate || 1,
+        position: Math.min(media.currentTime || 0, duration),
       });
     } catch (_) {}
   },
 
   /* ── Private: Audio events ── */
-  _onTimeUpdate() {
-    const { currentTime, duration } = this.audio;
+  _onTimeUpdate(media = this._activeMedia()) {
+    if (!media) return;
+    const { currentTime, duration } = media;
     if (!duration) return;
     const pct = (currentTime / duration) * 100;
 
@@ -437,15 +549,21 @@ const Player = {
   },
 
   _onEnded() {
+    const media = this._activeMedia();
     if (this.repeat === 'one') {
-      this.audio.currentTime = 0;
-      this.audio.play();
+      media.currentTime = 0;
+      media.play();
     } else if (this.repeat === 'all' || this.queueIdx < this.queue.length - 1) {
       this.next();
     } else {
       this.isPlaying = false;
       this._updatePlayUI(false);
     }
+  },
+
+  _onVideoEnded() {
+    this.closeVideo(false);
+    this._onEnded();
   },
 
   _onError() {
@@ -460,12 +578,12 @@ const Player = {
     this._emitState('loadstart');
   },
 
-  _onCanPlay() {
+  _onCanPlay(media = this._activeMedia()) {
     const btn = document.getElementById('play-pause-btn');
     if (btn) btn.style.opacity = '';
     this._setLoading(false);
     const total = document.getElementById('total-time');
-    if (total && this.audio.duration) total.textContent = this._formatTime(this.audio.duration);
+    if (total && media?.duration) total.textContent = this._formatTime(media.duration);
     this._syncMediaPosition();
     this._emitState('canplay');
   },
@@ -570,11 +688,17 @@ const Player = {
         break;
       case 'ArrowRight':
         if (e.altKey) { e.preventDefault(); this.next(); }
-        else if (e.shiftKey) { e.preventDefault(); this.audio.currentTime = Math.min(this.audio.duration, this.audio.currentTime + 10); }
+        else if (e.shiftKey) {
+          const media = this._activeMedia();
+          if (media?.duration) { e.preventDefault(); media.currentTime = Math.min(media.duration, media.currentTime + 10); }
+        }
         break;
       case 'ArrowLeft':
         if (e.altKey) { e.preventDefault(); this.prev(); }
-        else if (e.shiftKey) { e.preventDefault(); this.audio.currentTime = Math.max(0, this.audio.currentTime - 10); }
+        else if (e.shiftKey) {
+          const media = this._activeMedia();
+          if (media) { e.preventDefault(); media.currentTime = Math.max(0, media.currentTime - 10); }
+        }
         break;
       case 'KeyM':
         e.preventDefault();

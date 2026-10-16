@@ -289,6 +289,9 @@
           <svg id="repeat-icon-none" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           <svg id="repeat-icon-one" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="10" y="14" font-size="7" fill="currentColor" stroke="none">1</text></svg>
         </button>
+        <button class="player-btn player-video-mobile" onclick="Player.toggleVideo()" title="Basculer vers le clip" data-video-toggle aria-pressed="false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2z"/></svg>
+        </button>
       </div>
       <div class="player-progress">
         <span class="player-time" id="current-time">0:00</span>
@@ -306,6 +309,9 @@
 
     <!-- Volume & Extra -->
     <div class="player-extra">
+      <button class="player-btn" onclick="Player.toggleVideo()" title="Basculer vers le clip" data-video-toggle aria-pressed="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2z"/></svg>
+      </button>
       <button class="player-btn" onclick="UI.toggleLyricsPanel()" title="Paroles" id="lyrics-btn-player">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </button>
@@ -323,6 +329,28 @@
       </div>
     </div>
   </div>
+
+<!-- Clip video -->
+<div class="video-overlay hidden" id="video-overlay" role="dialog" aria-modal="true" aria-label="Clip vidéo">
+  <div class="video-stage">
+    <video id="video-player" playsinline preload="metadata"></video>
+    <div class="video-stage-header">
+      <div class="video-stage-meta">
+        <strong id="video-track-name">Clip vidéo</strong>
+        <span id="video-track-artist"></span>
+      </div>
+      <button class="video-close-btn" onclick="Player.closeVideo(true)" title="Revenir à l'audio" aria-label="Fermer le clip">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="video-stage-controls">
+      <button class="video-return-btn" onclick="Player.closeVideo(true)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/><path d="M20 12H9"/></svg>
+        Revenir à l'audio
+      </button>
+    </div>
+  </div>
+</div>
 
   <!-- Sidebar Toggle (mobile) -->
   <button class="sidebar-toggle" id="sidebar-toggle" onclick="UI.toggleSidebar()">

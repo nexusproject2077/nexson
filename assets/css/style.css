@@ -681,6 +681,7 @@ img { display: block; max-width: 100%; }
 }
 .player-btn:hover { color: var(--text-primary); transform: scale(1.05); }
 .player-btn.active { color: var(--purple-400); }
+.player-video-mobile { display: none; }
 .player-btn-play {
   width: 44px; height: 44px;
   background: var(--text-primary);
@@ -689,6 +690,40 @@ img { display: block; max-width: 100%; }
 }
 .player-btn-play:hover { transform: scale(1.06) !important; background: white; }
 .player-btn-prev, .player-btn-next { color: var(--text-secondary); }
+
+/* Full-screen clip, kept separate from the persistent music player. */
+.video-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  display: grid; place-items: center;
+  padding: 28px;
+  background: rgba(4, 4, 10, .94);
+  backdrop-filter: blur(16px);
+}
+.video-stage {
+  position: relative; width: min(1120px, 100%); max-height: 100%;
+  aspect-ratio: 16 / 9; overflow: hidden;
+  border-radius: 18px; background: #000;
+  box-shadow: 0 28px 90px rgba(0,0,0,.55);
+}
+.video-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.video-stage-header {
+  position: absolute; inset: 0 0 auto; display: flex; align-items: center;
+  justify-content: space-between; gap: 16px; padding: 18px 20px;
+  background: linear-gradient(180deg, rgba(0,0,0,.72), transparent);
+  pointer-events: none;
+}
+.video-stage-meta { min-width: 0; display: grid; gap: 3px; color: white; }
+.video-stage-meta strong, .video-stage-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.video-stage-meta span { color: rgba(255,255,255,.72); font-size: 13px; }
+.video-close-btn, .video-return-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  color: white; background: rgba(20,20,31,.78); border: 1px solid rgba(255,255,255,.18);
+  border-radius: 10px; cursor: pointer; transition: var(--trans-fast);
+}
+.video-close-btn { width: 40px; height: 40px; flex: 0 0 40px; pointer-events: auto; }
+.video-return-btn { padding: 10px 14px; font-weight: 600; }
+.video-close-btn:hover, .video-return-btn:hover { background: rgba(139,92,246,.85); }
+.video-stage-controls { position: absolute; right: 18px; bottom: 18px; }
 
 .player-progress {
   display: flex; align-items: center; gap: 10px;
@@ -2450,6 +2485,12 @@ a {
     display: none;
   }
 
+  .player-video-mobile {
+    display: flex;
+    width: 34px;
+    height: 34px;
+  }
+
   .player-btn-prev,
   .player-btn-next {
     display: none;
@@ -2475,6 +2516,24 @@ a {
   .progress-bar {
     width: 100%;
     height: 3px;
+  }
+
+  .video-overlay {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .video-stage {
+    width: 100%; height: 100%; max-height: none;
+    aspect-ratio: auto; border-radius: 0;
+    display: grid; place-items: center;
+  }
+
+  .video-stage video { max-height: 100%; }
+  .video-stage-header { padding: max(16px, var(--safe-top)) 16px 16px; }
+  .video-stage-controls {
+    right: 12px;
+    bottom: max(16px, var(--safe-bottom));
   }
 
   /* Lyrics / queue are bottom sheets, but never cover the player

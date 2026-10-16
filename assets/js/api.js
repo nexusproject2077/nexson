@@ -82,6 +82,7 @@ const API = {
       explicit: Boolean(t.explicit ?? false),
       lyrics: t.lyrics ?? null,
       streamEndpoint: t.streamEndpoint ?? '',
+      videoEndpoint: t.videoEndpoint ?? '',
     };
   },
 
@@ -214,6 +215,21 @@ const API = {
     }
 
     throw new Error('Aucun flux audio disponible');
+  },
+
+  async resolveTrackVideo(track) {
+    if (!track) throw new Error('Titre manquant');
+    if (!CONFIG.CUSTOM_MUSIC_API_ENABLED || !CONFIG.CUSTOM_MUSIC_API) {
+      throw new Error('Le mode clip nécessite le service NexSon');
+    }
+
+    const base = CONFIG.CUSTOM_MUSIC_API.replace(/\/$/, '');
+    const videoId = String(track.ytVideoId || track.trackId || '').replace(/^yt_/, '');
+    if (!videoId) throw new Error('Clip indisponible pour ce titre');
+
+    const endpoint = track.videoEndpoint || `/tracks/${encodeURIComponent(videoId)}/video`;
+    if (/^https?:\/\//i.test(endpoint)) return endpoint;
+    return `${base}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
   },
 
   /* ══════════════════════════════════════════

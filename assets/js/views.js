@@ -807,9 +807,9 @@ const Views = {
         <div class="settings-row">
           <div>
             <div class="settings-label">Qualité audio</div>
-            <div class="settings-desc">Titres complets via Jamendo (Creative Commons)</div>
+            <div class="settings-desc">Meilleur flux audio disponible pour chaque titre</div>
           </div>
-          <span style="color:var(--purple-400);font-size:13px;font-weight:600">Standard</span>
+          <span style="color:var(--purple-400);font-size:13px;font-weight:600">Optimale</span>
         </div>
       </div>
 
@@ -1013,7 +1013,8 @@ const Lyrics = {
 
   seekToLine(index) {
     const line = this._lines[index];
-    if (line && Player.audio) Player.audio.currentTime = line.time;
+    const media = Player._activeMedia?.() || Player.audio;
+    if (line && media) media.currentTime = line.time;
   },
 
   async loadForTrack(track) {
