@@ -366,7 +366,7 @@ const UI = {
 
   /* ── Active nav item ── */
   setActiveNav(route) {
-    document.querySelectorAll('.nav-item').forEach(el => {
+    document.querySelectorAll('.nav-item, .mobile-nav-btn').forEach(el => {
       el.classList.toggle('active', el.dataset.route === route);
     });
   },
