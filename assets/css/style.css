@@ -1707,6 +1707,18 @@ img { display: block; max-width: 100%; }
 .player-track-name, .player-track-artist { white-space: normal; text-overflow: clip; overflow: visible; }
 .card-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .track-info-cell > div:last-child { min-width: 0; }
+
+/* Quick-access cards must grow to show their full title. This overrides the
+   generic text truncation rules above: no fixed row or line clamp here. */
+.quick-access .quick-item { align-items: stretch; height: auto; }
+.quick-access .quick-item-name {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  white-space: normal;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
 @media (max-width: 640px) {
   .activity-bar { margin-bottom: 10px; padding-bottom: 10px; }
   .activity-chip { min-height: 36px; padding-inline: 12px; }
