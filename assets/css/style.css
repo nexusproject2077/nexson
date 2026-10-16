@@ -1271,6 +1271,11 @@ img { display: block; max-width: 100%; }
 .settings-row:last-child { border-bottom: none; }
 .settings-label { font-size: 15px; font-weight: 500; }
 .settings-desc { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.settings-crossfade { align-items: center; }
+.crossfade-control { width: min(260px, 42vw); display: grid; gap: 7px; flex-shrink: 0; }
+.crossfade-control output { color: var(--purple-400); font-size: 13px; font-weight: 700; text-align: right; }
+.crossfade-slider { width: 100%; accent-color: var(--purple-500); cursor: pointer; }
+.crossfade-scale { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 11px; }
 .toggle-switch {
   position: relative; width: 44px; height: 24px; flex-shrink: 0;
 }
@@ -2284,6 +2289,15 @@ a {
 
   .settings-row {
     gap: 12px;
+  }
+
+  .settings-crossfade {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .crossfade-control {
+    width: 100%;
   }
 
   .modal-overlay {

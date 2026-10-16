@@ -804,6 +804,17 @@ const Views = {
           </div>
           <button class="btn-outline" onclick="Player.toggleRepeat();Views.renderSettings()">Changer</button>
         </div>
+        <div class="settings-row settings-crossfade">
+          <div>
+            <div class="settings-label">Fondu enchaîné</div>
+            <div class="settings-desc">Mélange la fin du titre avec le début du suivant</div>
+          </div>
+          <div class="crossfade-control">
+            <output id="crossfade-value" for="crossfade-slider">${Player.crossfade ? `${Player.crossfade} s` : 'Désactivé'}</output>
+            <input id="crossfade-slider" class="crossfade-slider" type="range" min="0" max="12" step="1" value="${Player.crossfade}" oninput="Player.setCrossfade(this.value)" aria-label="Durée du fondu enchaîné">
+            <div class="crossfade-scale"><span>0 s</span><span>12 s</span></div>
+          </div>
+        </div>
         <div class="settings-row">
           <div>
             <div class="settings-label">Qualité audio</div>
@@ -871,7 +882,7 @@ const Views = {
   },
   _resetData() {
     if (confirm('Réinitialiser toutes tes données ? (Playlists, likes, etc.)')) {
-      [Store.KEYS.LIKED, Store.KEYS.PLAYLISTS, Store.KEYS.RECENT, Store.KEYS.SAVED_ALBUMS, Store.KEYS.FOLLOWED].forEach(k => localStorage.removeItem(k));
+      [Store.KEYS.LIKED, Store.KEYS.PLAYLISTS, Store.KEYS.RECENT, Store.KEYS.SAVED_ALBUMS, Store.KEYS.FOLLOWED, Store.KEYS.CROSSFADE].forEach(k => localStorage.removeItem(k));
       UI.renderSidebarPlaylists();
       UI.toast('Données réinitialisées', 'info');
       Views.renderSettings();

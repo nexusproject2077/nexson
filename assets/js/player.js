@@ -4,6 +4,7 @@
 
 const Player = {
   audio:      null,
+  nextAudio:  null,
   video:      null,
   queue:      [],
   queueIdx:   0,
@@ -18,16 +19,25 @@ const Player = {
   _pendingSeek: 0,
   _videoMode: false,
   _audioWasPlayingBeforeVideo: false,
+  crossfade: 0,
+  _crossfadePrepared: null,
+  _crossfadePreparing: false,
+  _isCrossfading: false,
+  _masterVolume: 0.8,
 
   init() {
     this.audio    = document.getElementById('audio-player');
+    this.nextAudio = document.getElementById('audio-crossfade');
     this.video    = document.getElementById('video-player');
     this.shuffle  = Store.getShuffle();
     this.repeat   = Store.getRepeat();
     const vol     = Store.getVolume();
+    this.crossfade = this._normalizeCrossfade(Store.getCrossfade());
+    this._masterVolume = vol / 100;
 
     // Restore volume
     this.audio.volume = vol / 100;
+    if (this.nextAudio) this.nextAudio.volume = vol / 100;
     if (this.video) this.video.volume = vol / 100;
     const slider = document.getElementById('volume-slider');
     if (slider) slider.value = vol;
@@ -45,19 +55,9 @@ const Player = {
     this._updateShuffleUI();
     this._updateRepeatUI();
 
-    // Audio event listeners
-    this.audio.addEventListener('timeupdate', () => this._onTimeUpdate());
-    this.audio.addEventListener('ended',      () => this._onEnded());
-    this.audio.addEventListener('error',      () => this._onError());
-    this.audio.addEventListener('loadstart',  () => this._onLoadStart());
-    this.audio.addEventListener('canplay',    () => this._onCanPlay());
-    this.audio.addEventListener('play',       () => { this.isPlaying = true; this._updatePlayUI(true); });
-    this.audio.addEventListener('pause',      () => { this.isPlaying = false; this._updatePlayUI(false); this._emitState('pause'); });
-    this.audio.addEventListener('playing',     () => { this._setLoading(false); this._emitState('playing'); });
-    this.audio.addEventListener('waiting',     () => this._setLoading(true));
-    this.audio.addEventListener('stalled',     () => this._setLoading(true));
-    this.audio.addEventListener('durationchange', () => this._syncMediaPosition());
-    this.audio.addEventListener('volumechange', () => this._emitState('volumechange'));
+    // Two audio elements let the next title begin before the current one ends.
+    this._bindAudioElement(this.audio);
+    if (this.nextAudio) this._bindAudioElement(this.nextAudio);
 
     if (this.video) {
       this.video.addEventListener('timeupdate', () => this._onTimeUpdate(this.video));
@@ -79,10 +79,37 @@ const Player = {
     document.addEventListener('keydown', (e) => this._handleKey(e));
   },
 
+  _bindAudioElement(media) {
+    const isActive = () => media === this.audio;
+    media.addEventListener('timeupdate', () => { if (isActive()) this._onTimeUpdate(media); });
+    media.addEventListener('ended', () => { if (isActive()) this._onEnded(); });
+    media.addEventListener('error', () => { if (isActive()) this._onError(); });
+    media.addEventListener('loadstart', () => { if (isActive()) this._onLoadStart(); });
+    media.addEventListener('canplay', () => { if (isActive()) this._onCanPlay(media); });
+    media.addEventListener('play', () => {
+      if (isActive()) { this.isPlaying = true; this._updatePlayUI(true); }
+    });
+    media.addEventListener('pause', () => {
+      if (isActive() && !this._isCrossfading) {
+        this.isPlaying = false;
+        this._updatePlayUI(false);
+        this._emitState('pause');
+      }
+    });
+    media.addEventListener('playing', () => {
+      if (isActive()) { this._setLoading(false); this._emitState('playing'); }
+    });
+    media.addEventListener('waiting', () => { if (isActive()) this._setLoading(true); });
+    media.addEventListener('stalled', () => { if (isActive()) this._setLoading(true); });
+    media.addEventListener('durationchange', () => { if (isActive()) this._syncMediaPosition(); });
+    media.addEventListener('volumechange', () => { if (isActive()) this._emitState('volumechange'); });
+  },
+
   /* ── Play a track ── */
   async playTrack(track, queue = null, idx = 0) {
     if (!track) return;
     if (this._videoMode) this.closeVideo(false);
+    this._cancelCrossfade();
     if (queue) {
       this.queue    = queue;
       this.queueIdx = idx;
@@ -357,7 +384,9 @@ const Player = {
   /* ── Volume ── */
   setVolume(val) {
     const v = parseInt(val);
-    this.audio.volume = v / 100;
+    this._masterVolume = v / 100;
+    this.audio.volume = this._masterVolume;
+    if (this.nextAudio) this.nextAudio.volume = this._masterVolume;
     if (this.video) this.video.volume = v / 100;
     Store.setVolume(v);
     this.muted = v === 0;
@@ -367,20 +396,129 @@ const Player = {
   toggleMute() {
     if (this.muted) {
       const v = Store.getVolume() || 80;
-      this.audio.volume = v / 100;
+      this._masterVolume = v / 100;
+      this.audio.volume = this._masterVolume;
+      if (this.nextAudio) this.nextAudio.volume = this._masterVolume;
       if (this.video) this.video.volume = v / 100;
       const slider = document.getElementById('volume-slider');
       if (slider) slider.value = v;
       this.muted = false;
       this._updateVolumeIcon(v);
     } else {
+      this._masterVolume = 0;
       this.audio.volume = 0;
+      if (this.nextAudio) this.nextAudio.volume = 0;
       if (this.video) this.video.volume = 0;
       const slider = document.getElementById('volume-slider');
       if (slider) slider.value = 0;
       this.muted = true;
       this._updateVolumeIcon(0);
     }
+  },
+
+  /* ── Crossfade ── */
+  _normalizeCrossfade(value) {
+    return Math.max(0, Math.min(12, Number(value) || 0));
+  },
+
+  setCrossfade(value) {
+    this.crossfade = this._normalizeCrossfade(value);
+    Store.setCrossfade(this.crossfade);
+    if (!this.crossfade) this._cancelCrossfade();
+    const output = document.getElementById('crossfade-value');
+    if (output) output.textContent = this.crossfade ? `${this.crossfade} s` : 'Désactivé';
+  },
+
+  _nextQueueIndex() {
+    if (!this.queue.length || this.repeat === 'one') return null;
+    if (this.shuffle) {
+      const current = this._shuffleOrder.indexOf(this.queueIdx);
+      if (current < 0 || !this._shuffleOrder.length) return null;
+      const next = current + 1;
+      if (next >= this._shuffleOrder.length && this.repeat !== 'all') return null;
+      return this._shuffleOrder[next % this._shuffleOrder.length];
+    }
+    if (this.queueIdx < this.queue.length - 1) return this.queueIdx + 1;
+    return this.repeat === 'all' ? 0 : null;
+  },
+
+  async _prepareCrossfade() {
+    if (this._crossfadePrepared || this._crossfadePreparing || !this.crossfade || this._videoMode) return;
+    const nextIdx = this._nextQueueIndex();
+    if (nextIdx === null || !this.nextAudio) return;
+    const source = this.audio;
+    const sourceIdx = this.queueIdx;
+    const track = this.queue[nextIdx];
+    if (!track) return;
+
+    this._crossfadePreparing = true;
+    try {
+      const url = track.previewUrl || await API.resolveTrackStream(track);
+      if (source !== this.audio || sourceIdx !== this.queueIdx) return;
+      track.previewUrl = url;
+      this.nextAudio.pause();
+      this.nextAudio.src = url;
+      this.nextAudio.preload = 'auto';
+      this.nextAudio.load();
+      this._crossfadePrepared = { idx: nextIdx, track };
+    } catch (e) {
+      console.warn('[NexSon] Crossfade preload failed:', e.message);
+    } finally {
+      this._crossfadePreparing = false;
+    }
+  },
+
+  _startCrossfade() {
+    const prepared = this._crossfadePrepared;
+    if (!prepared || this._isCrossfading || !this.nextAudio || this.nextAudio.readyState < 2) return;
+    this._isCrossfading = true;
+    this.nextAudio.currentTime = 0;
+    this.nextAudio.volume = 0;
+    this.nextAudio.play().catch(() => { this._isCrossfading = false; });
+    this.queueIdx = prepared.idx;
+    Store.setQueueIdx(this.queueIdx);
+    Store.addRecent(prepared.track);
+    this._updatePlayerUI(prepared.track);
+    this._updateMediaSession(prepared.track);
+    Lyrics.loadForTrack(prepared.track);
+    UI.updateQueuePanel();
+  },
+
+  _updateCrossfade() {
+    if (!this._isCrossfading || !this.nextAudio || !this.crossfade) return;
+    const remaining = Math.max(0, (this.audio.duration || 0) - this.audio.currentTime);
+    const progress = Math.max(0, Math.min(1, 1 - (remaining / this.crossfade)));
+    this.audio.volume = this._masterVolume * (1 - progress);
+    this.nextAudio.volume = this._masterVolume * progress;
+    if (progress >= 0.999) this._finishCrossfade();
+  },
+
+  _finishCrossfade() {
+    if (!this._isCrossfading || !this.nextAudio) return;
+    const outgoing = this.audio;
+    this.audio = this.nextAudio;
+    this.nextAudio = outgoing;
+    this._isCrossfading = false;
+    this._crossfadePrepared = null;
+    outgoing.pause();
+    outgoing.removeAttribute('src');
+    outgoing.load();
+    this.audio.volume = this._masterVolume;
+    this._onTimeUpdate(this.audio);
+    this._emitState('trackchange');
+  },
+
+  _cancelCrossfade() {
+    this._crossfadePrepared = null;
+    this._crossfadePreparing = false;
+    if (this.nextAudio) {
+      this.nextAudio.pause();
+      this.nextAudio.removeAttribute('src');
+      this.nextAudio.load();
+      this.nextAudio.volume = this._masterVolume;
+    }
+    if (this.audio) this.audio.volume = this._masterVolume;
+    this._isCrossfading = false;
   },
 
   /* ── Play from queue at index ── */
@@ -523,6 +661,12 @@ const Player = {
     if (!media) return;
     const { currentTime, duration } = media;
     if (!duration) return;
+    if (media === this.audio && !this._videoMode && this.crossfade > 0) {
+      const remaining = duration - currentTime;
+      if (remaining <= this.crossfade + 8) this._prepareCrossfade();
+      if (remaining <= this.crossfade) this._startCrossfade();
+      this._updateCrossfade();
+    }
     const pct = (currentTime / duration) * 100;
 
     const fill  = document.getElementById('progress-fill');
@@ -549,6 +693,10 @@ const Player = {
   },
 
   _onEnded() {
+    if (this._isCrossfading) {
+      this._finishCrossfade();
+      return;
+    }
     const media = this._activeMedia();
     if (this.repeat === 'one') {
       media.currentTime = 0;

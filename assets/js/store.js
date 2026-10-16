@@ -15,6 +15,7 @@ const Store = {
     SHUFFLE:        'nexson_shuffle',
     REPEAT:         'nexson_repeat',
     VOLUME:         'nexson_volume',
+    CROSSFADE:      'nexson_crossfade',
     THEME:          'nexson_theme',
     SAVED_ALBUMS:   'nexson_albums',
     FOLLOWED:       'nexson_followed',
@@ -164,6 +165,8 @@ const Store = {
   /* ── Player Prefs ── */
   getVolume()    { return this._get(this.KEYS.VOLUME, 80); },
   setVolume(v)   { this._set(this.KEYS.VOLUME, v); },
+  getCrossfade() { return this._get(this.KEYS.CROSSFADE, 0); },
+  setCrossfade(v){ this._set(this.KEYS.CROSSFADE, v); },
   getShuffle()   { return this._get(this.KEYS.SHUFFLE, false); },
   setShuffle(v)  { this._set(this.KEYS.SHUFFLE, v); },
   getRepeat()    { return this._get(this.KEYS.REPEAT, 'none'); }, // none | one | all
