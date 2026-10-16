@@ -239,8 +239,33 @@ def _search_ytdlp(term: str, limit: int) -> list:
     return tracks
 
 
+def _audio_quality_score(format_info: dict) -> tuple:
+    """Classe les flux audio par qualité réelle, puis compatibilité web."""
+    codec = (format_info.get("acodec") or "").lower()
+    extension = (format_info.get("ext") or "").lower()
+    # Le débit est le premier critère. À débit égal, le taux d'échantillonnage
+    # puis Opus/AAC (tous deux lus nativement par les navigateurs récents)
+    # permettent de départager les flux.
+    bitrate = format_info.get("abr") or format_info.get("tbr") or 0
+    sample_rate = format_info.get("asr") or 0
+    web_codec = int("opus" in codec or "mp4a" in codec or "aac" in codec)
+    web_container = int(extension in {"webm", "m4a", "mp4"})
+    return bitrate, sample_rate, web_codec, web_container
+
+
+def _best_audio_url(info: dict) -> str:
+    """Extrait la meilleure piste audio autonome proposée par YouTube."""
+    formats = [
+        format_info for format_info in info.get("formats", [])
+        if format_info.get("vcodec") == "none" and format_info.get("url")
+    ]
+    if not formats:
+        return info.get("url", "")
+    return max(formats, key=_audio_quality_score)["url"]
+
+
 def _resolve_stream_url(video_id: str) -> str:
-    """Retourne l'URL directe du flux audio (cache 1h)."""
+    """Retourne l'URL directe de la meilleure piste audio disponible (cache 1h)."""
     now = time.time()
 
     with _cache_lock:
@@ -249,7 +274,10 @@ def _resolve_stream_url(video_id: str) -> str:
             return entry["url"]
 
     ydl_opts = _with_youtube_cookies({
-        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+        # Ne pas imposer M4A : sur YouTube, Opus/WebM offre fréquemment un
+        # débit plus élevé. La sélection finale ci-dessous compare tous les
+        # formats audio réellement retournés par l'extracteur.
+        "format": "bestaudio/best",
         "quiet": True,
         "no_warnings": True,
         "extract_flat": False,
@@ -269,15 +297,7 @@ def _resolve_stream_url(video_id: str) -> str:
             download=False,
         )
 
-        url = info.get("url", "")
-        if not url:
-            formats = [
-                f for f in info.get("formats", [])
-                if f.get("vcodec") == "none" and f.get("url")
-            ]
-            if formats:
-                formats.sort(key=lambda f: f.get("abr") or f.get("tbr") or 0)
-                url = formats[-1]["url"]
+        url = _best_audio_url(info)
 
     if url:
         with _cache_lock:
