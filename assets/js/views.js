@@ -840,9 +840,40 @@ const Views = {
         <div class="settings-row">
           <div>
             <div class="settings-label">Qualité audio</div>
-            <div class="settings-desc">Meilleur flux audio disponible pour chaque titre</div>
+            <div class="settings-desc">Choisit un flux jusqu'au niveau disponible pour le titre</div>
           </div>
-          <span style="color:var(--purple-400);font-size:13px;font-weight:600">Optimale</span>
+          <select class="sort-select" onchange="Player.setAudioQuality(this.value)" aria-label="Qualité audio">
+            <option value="low" ${Player.audioQuality === 'low' ? 'selected' : ''}>Basse</option>
+            <option value="normal" ${Player.audioQuality === 'normal' ? 'selected' : ''}>Normale</option>
+            <option value="high" ${Player.audioQuality === 'high' ? 'selected' : ''}>Élevée</option>
+            <option value="very-high" ${Player.audioQuality === 'very-high' ? 'selected' : ''}>Très élevée</option>
+          </select>
+        </div>
+        <div class="settings-row equalizer-settings">
+          <div class="equalizer-heading">
+            <div class="settings-label">Égaliseur</div>
+            <div class="settings-desc">Réglage réel des fréquences sur la lecture NexSon</div>
+          </div>
+          <div class="equalizer-panel">
+            <div class="equalizer-toolbar">
+              <label for="eq-preset">Préréglage</label>
+              <select id="eq-preset" class="sort-select" onchange="Player.setEqualizerPreset(this.value)">
+                ${[['flat','Neutre'],['bass','Basses'],['vocal','Voix'],['rock','Rock'],['electronic','Électronique'],['acoustic','Acoustique']].map(([value, label]) => `<option value="${value}" ${(Player._eqState?.preset || 'flat') === value ? 'selected' : ''}>${label}</option>`).join('')}
+              </select>
+            </div>
+            <div class="equalizer-bands">
+              ${[['60','Graves'],['150','Basses'],['400','Bas médiums'],['1k','Médiums'],['2.4k','Présence'],['15k','Aigus']].map(([frequency, label], index) => {
+                const value = Number(Player._eqState?.bands?.[index] || 0);
+                return `<label class="eq-band"><output id="eq-band-${index}-value">${value > 0 ? '+' : ''}${value} dB</output><input data-eq-band="${index}" type="range" min="-12" max="12" step="1" value="${value}" oninput="Player.setEqualizerBand(${index}, this.value)" aria-label="${label} ${frequency} Hz"><span>${frequency}</span></label>`;
+              }).join('')}
+            </div>
+            <div class="spatial-audio">
+              <span>Audio spatial</span>
+              <div role="group" aria-label="Mode audio spatial">
+                ${[['off','Désactivé'],['3d','3D'],['8d','8D']].map(([value, label]) => `<button class="spatial-mode ${(Player._eqState?.spatial || 'off') === value ? 'active' : ''}" onclick="Player.setSpatialMode('${value}');Views.renderSettings()">${label}</button>`).join('')}
+              </div>
+            </div>
+          </div>
         </div>
         <div class="settings-row">
           <div>
@@ -910,7 +941,7 @@ const Views = {
   },
   _resetData() {
     if (confirm('Réinitialiser toutes tes données ? (Playlists, likes, etc.)')) {
-      [Store.KEYS.LIKED, Store.KEYS.PLAYLISTS, Store.KEYS.RECENT, Store.KEYS.SAVED_ALBUMS, Store.KEYS.FOLLOWED, Store.KEYS.CROSSFADE].forEach(k => localStorage.removeItem(k));
+      [Store.KEYS.LIKED, Store.KEYS.PLAYLISTS, Store.KEYS.RECENT, Store.KEYS.SAVED_ALBUMS, Store.KEYS.FOLLOWED, Store.KEYS.CROSSFADE, Store.KEYS.AUDIO_QUALITY, Store.KEYS.EQUALIZER].forEach(k => localStorage.removeItem(k));
       UI.renderSidebarPlaylists();
       UI.toast('Données réinitialisées', 'info');
       Views.renderSettings();

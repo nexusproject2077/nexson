@@ -196,9 +196,9 @@ const API = {
     return null;
   },
 
-  async resolveTrackStream(track) {
+  async resolveTrackStream(track, forceResolve = false) {
     if (!track) throw new Error('Titre manquant');
-    if (track.previewUrl) return track.previewUrl;
+    if (track.previewUrl && !forceResolve) return track.previewUrl;
 
     if (track.invidiousId) {
       return this.resolveInvidiousStream(track.invidiousId, track.invidiousBase);
@@ -210,8 +210,12 @@ const API = {
 
       // A stream endpoint is consumed directly by <audio>; do not pre-fetch
       // the media body in JavaScript before giving it to the player.
-      if (/^https?:\/\//i.test(endpoint)) return endpoint;
-      return `${base}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+      const quality = ['low', 'normal', 'high', 'very-high'].includes(window.Player?.audioQuality)
+        ? window.Player.audioQuality : 'very-high';
+      const joiner = endpoint.includes('?') ? '&' : '?';
+      const resolved = `${endpoint}${joiner}quality=${encodeURIComponent(quality)}`;
+      if (/^https?:\/\//i.test(resolved)) return resolved;
+      return `${base}${resolved.startsWith('/') ? resolved : '/' + resolved}`;
     }
 
     throw new Error('Aucun flux audio disponible');

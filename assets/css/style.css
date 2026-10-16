@@ -1241,6 +1241,19 @@ img { display: block; max-width: 100%; }
 }
 .sort-select:hover { border-color: var(--border-medium); }
 .playlist-sort-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 8px 0 14px; color: var(--text-muted); font-size: 13px; }
+.equalizer-settings { display: block; }
+.equalizer-heading { margin-bottom: 16px; }
+.equalizer-panel { background: rgba(255,255,255,.035); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px; }
+.equalizer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 13px; }
+.equalizer-bands { display: grid; grid-template-columns: repeat(6, minmax(42px, 1fr)); gap: 10px; margin: 18px 0; }
+.eq-band { display: grid; justify-items: center; gap: 8px; min-width: 0; color: var(--text-muted); font-size: 11px; }
+.eq-band output { color: var(--purple-300); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.eq-band input { width: 100%; min-width: 0; accent-color: var(--purple-500); cursor: pointer; }
+.eq-band span { font-weight: 700; }
+.spatial-audio { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 13px; }
+.spatial-audio > div { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--bg-elevated); }
+.spatial-mode { min-height: 30px; padding: 0 10px; border-radius: 6px; color: var(--text-muted); font-size: 12px; font-weight: 700; }
+.spatial-mode.active { color: white; background: var(--purple-600); }
 
 /* ══════════════════════════════════════════════
    PROFILE / SETTINGS
@@ -2318,6 +2331,20 @@ a {
 
   .crossfade-control {
     width: 100%;
+  }
+
+  .equalizer-toolbar,
+  .spatial-audio {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .equalizer-toolbar .sort-select {
+    width: 100%;
+  }
+
+  .equalizer-bands {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .modal-overlay {

@@ -24,6 +24,11 @@ const Player = {
   _crossfadePreparing: false,
   _isCrossfading: false,
   _masterVolume: 0.8,
+  audioQuality: 'very-high',
+  _audioContext: null,
+  _audioNodes: new Map(),
+  _eqState: null,
+  _spatialTimer: null,
 
   init() {
     this.audio    = document.getElementById('audio-player');
@@ -33,6 +38,14 @@ const Player = {
     this.repeat   = Store.getRepeat();
     const vol     = Store.getVolume();
     this.crossfade = this._normalizeCrossfade(Store.getCrossfade());
+    this.audioQuality = ['low', 'normal', 'high', 'very-high'].includes(Store.getAudioQuality())
+      ? Store.getAudioQuality() : 'very-high';
+    this._eqState = Store.getEqualizer() || {
+      enabled: true,
+      preset: 'flat',
+      bands: [0, 0, 0, 0, 0, 0],
+      spatial: 'off',
+    };
     this._masterVolume = vol / 100;
 
     // Restore volume
@@ -108,6 +121,7 @@ const Player = {
   /* ── Play a track ── */
   async playTrack(track, queue = null, idx = 0) {
     if (!track) return;
+    this._resumeAudioEffects();
     if (this._videoMode) this.closeVideo(false);
     this._cancelCrossfade();
     if (queue) {
@@ -164,6 +178,7 @@ const Player = {
   toggle() {
     const media = this._activeMedia();
     if (!media?.src) return;
+    this._resumeAudioEffects();
     if (this.isPlaying) media.pause();
     else media.play();
   },
@@ -252,6 +267,138 @@ const Player = {
 
   _activeMedia() {
     return this._videoMode && this.video ? this.video : this.audio;
+  },
+
+  /* ── Audio quality and equalizer ── */
+  async setAudioQuality(value) {
+    if (!['low', 'normal', 'high', 'very-high'].includes(value)) return;
+    this.audioQuality = value;
+    Store.setAudioQuality(value);
+    const label = document.getElementById('audio-quality-value');
+    if (label) label.textContent = { low: 'Basse', normal: 'Normale', high: 'Élevée', 'very-high': 'Très élevée' }[value];
+
+    const track = this.currentTrack();
+    if (!track || !this.audio?.src || this._videoMode) return;
+    const position = this.audio.currentTime || 0;
+    const shouldPlay = !this.audio.paused;
+    this._cancelCrossfade();
+    try {
+      const url = await API.resolveTrackStream(track, true);
+      track.previewUrl = url;
+      this.audio.src = url;
+      this.audio.load();
+      this.audio.addEventListener('loadedmetadata', () => {
+        this.audio.currentTime = Math.min(position, Math.max(0, (this.audio.duration || position) - 0.1));
+        if (shouldPlay) this.audio.play().catch(() => {});
+      }, { once: true });
+      UI.toast('Qualité audio actualisée', 'success');
+    } catch (error) {
+      UI.toast('Impossible de changer la qualité maintenant', 'error');
+    }
+  },
+
+  _resumeAudioEffects() {
+    this._ensureAudioEffects();
+    if (this._audioContext?.state === 'suspended') this._audioContext.resume().catch(() => {});
+  },
+
+  _ensureAudioEffects() {
+    if (this._audioContext) return;
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) return;
+    try {
+      this._audioContext = new Context();
+      [this.audio, this.nextAudio, this.video].filter(Boolean).forEach(media => this._connectMediaEffects(media));
+      this._applyEqualizer();
+    } catch (error) {
+      console.warn('[NexSon] Equalizer unavailable:', error);
+      this._audioContext = null;
+    }
+  },
+
+  _connectMediaEffects(media) {
+    if (!this._audioContext || this._audioNodes.has(media)) return;
+    const context = this._audioContext;
+    const source = context.createMediaElementSource(media);
+    const definitions = [
+      ['lowshelf', 60], ['peaking', 150], ['peaking', 400],
+      ['peaking', 1000], ['peaking', 2400], ['highshelf', 15000],
+    ];
+    const filters = definitions.map(([type, frequency]) => {
+      const filter = context.createBiquadFilter();
+      filter.type = type;
+      filter.frequency.value = frequency;
+      filter.Q.value = 1;
+      return filter;
+    });
+    const panner = context.createStereoPanner ? context.createStereoPanner() : context.createGain();
+    let node = source;
+    filters.forEach(filter => { node.connect(filter); node = filter; });
+    node.connect(panner);
+    panner.connect(context.destination);
+    this._audioNodes.set(media, { filters, panner });
+  },
+
+  _applyEqualizer() {
+    const state = this._eqState;
+    if (!state) return;
+    this._audioNodes.forEach(({ filters }) => filters.forEach((filter, index) => {
+      filter.gain.value = state.enabled ? Number(state.bands[index] || 0) : 0;
+    }));
+    this._startSpatialEffect();
+  },
+
+  setEqualizerBand(index, value) {
+    if (!this._eqState || index < 0 || index > 5) return;
+    this._eqState.enabled = true;
+    this._eqState.preset = 'custom';
+    this._eqState.bands[index] = Math.max(-12, Math.min(12, Number(value) || 0));
+    Store.setEqualizer(this._eqState);
+    this._applyEqualizer();
+    const output = document.getElementById(`eq-band-${index}-value`);
+    if (output) output.textContent = `${this._eqState.bands[index] > 0 ? '+' : ''}${this._eqState.bands[index]} dB`;
+  },
+
+  setEqualizerPreset(preset) {
+    const presets = {
+      flat: [0, 0, 0, 0, 0, 0],
+      bass: [7, 5, 2, 0, -1, -2],
+      vocal: [-2, -1, 2, 5, 3, 1],
+      rock: [5, 3, -1, 2, 4, 5],
+      electronic: [6, 3, 0, 3, 5, 6],
+      acoustic: [3, 2, 1, 3, 2, 4],
+    };
+    if (!presets[preset]) return;
+    this._eqState = { ...this._eqState, enabled: true, preset, bands: [...presets[preset]] };
+    Store.setEqualizer(this._eqState);
+    this._applyEqualizer();
+    document.querySelectorAll('[data-eq-band]').forEach(input => {
+      const index = Number(input.dataset.eqBand);
+      input.value = this._eqState.bands[index];
+      const output = document.getElementById(`eq-band-${index}-value`);
+      if (output) output.textContent = `${this._eqState.bands[index] > 0 ? '+' : ''}${this._eqState.bands[index]} dB`;
+    });
+  },
+
+  setSpatialMode(mode) {
+    if (!['off', '3d', '8d'].includes(mode)) return;
+    this._eqState.spatial = mode;
+    Store.setEqualizer(this._eqState);
+    this._startSpatialEffect();
+  },
+
+  _startSpatialEffect() {
+    clearInterval(this._spatialTimer);
+    const mode = this._eqState?.spatial || 'off';
+    const applyPan = value => this._audioNodes.forEach(({ panner }) => {
+      if (panner.pan) panner.pan.value = value;
+    });
+    if (mode === 'off') return applyPan(0);
+    const startedAt = performance.now();
+    const speed = mode === '8d' ? 0.65 : 0.22;
+    this._spatialTimer = setInterval(() => {
+      applyPan(Math.sin((performance.now() - startedAt) / 1000 * Math.PI * 2 * speed));
+    }, 40);
   },
 
   /* ── Next track ── */

@@ -259,14 +259,27 @@ def _audio_quality_score(format_info: dict) -> tuple:
     return bitrate, sample_rate, web_codec, web_container
 
 
-def _best_audio_url(info: dict) -> str:
-    """Extrait la meilleure piste audio autonome proposée par YouTube."""
+def _best_audio_url(info: dict, quality: str = "very-high") -> str:
+    """Extrait une piste audio selon le niveau demandé, sans suréchantillonnage."""
     formats = [
         format_info for format_info in info.get("formats", [])
         if format_info.get("vcodec") == "none" and format_info.get("url")
     ]
     if not formats:
         return info.get("url", "")
+    targets = {"low": 64, "normal": 128, "high": 160}
+    target = targets.get(quality)
+    if target:
+        under_target = [
+            format_info for format_info in formats
+            if (format_info.get("abr") or format_info.get("tbr") or 0) <= target
+        ]
+        if under_target:
+            return max(under_target, key=_audio_quality_score)["url"]
+        return min(
+            formats,
+            key=lambda format_info: abs((format_info.get("abr") or format_info.get("tbr") or 0) - target),
+        )["url"]
     return max(formats, key=_audio_quality_score)["url"]
 
 
@@ -298,12 +311,12 @@ def _best_video_url(info: dict) -> str:
     return max(formats, key=_video_quality_score)["url"]
 
 
-def _resolve_stream_url(video_id: str) -> str:
+def _resolve_stream_url(video_id: str, quality: str = "very-high") -> str:
     """Retourne l'URL directe de la meilleure piste audio disponible (cache 1h)."""
     now = time.time()
 
     with _cache_lock:
-        entry = _url_cache.get(f"audio:{video_id}")
+        entry = _url_cache.get(f"audio:{quality}:{video_id}")
         if entry and entry["exp"] > now:
             return entry["url"]
 
@@ -331,11 +344,11 @@ def _resolve_stream_url(video_id: str) -> str:
             download=False,
         )
 
-        url = _best_audio_url(info)
+        url = _best_audio_url(info, quality)
 
     if url:
         with _cache_lock:
-            _url_cache[f"audio:{video_id}"] = {
+            _url_cache[f"audio:{quality}:{video_id}"] = {
                 "url": url,
                 "exp": now + CACHE_TTL,
             }
@@ -386,7 +399,10 @@ def _proxy_stream(video_id: str, media_kind: str = "audio"):
         return jsonify({"error": "Paramètre id manquant"}), 400
 
     try:
-        media_url = _resolve_video_url(video_id) if media_kind == "video" else _resolve_stream_url(video_id)
+        quality = request.args.get("quality", "very-high").strip().lower()
+        if quality not in {"low", "normal", "high", "very-high"}:
+            quality = "very-high"
+        media_url = _resolve_video_url(video_id) if media_kind == "video" else _resolve_stream_url(video_id, quality)
         if not media_url:
             return jsonify({"error": "Impossible de résoudre le flux"}), 404
 
