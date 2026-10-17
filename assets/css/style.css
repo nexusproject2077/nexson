@@ -1108,8 +1108,7 @@ img { display: block; max-width: 100%; }
 }
 .quick-item:hover { background: var(--bg-hover); border-color: var(--border-subtle); }
 .quick-item-cover {
-  width: 64px; align-self: stretch; flex-shrink: 0;
-  min-height: 64px;
+  width: 64px; height: 64px; align-self: center; flex-shrink: 0;
   overflow: hidden;
 }
 .quick-item-cover img { width: 100%; height: 100%; object-fit: cover; }

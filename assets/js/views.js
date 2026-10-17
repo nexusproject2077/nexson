@@ -3,6 +3,7 @@
    ============================================ */
 
 const Views = {
+  _searchRequestId: 0,
 
   /* ══════════════════════════════ HOME ══════ */
   async renderHome() {
@@ -235,10 +236,10 @@ const Views = {
       </div>
     `;
 
-    this._loadSearchResults(query);
+    this._loadSearchResults(query, ++this._searchRequestId);
   },
 
-  async _loadSearchResults(query) {
+  async _loadSearchResults(query, requestId) {
     const container = document.getElementById('search-results');
     if (!container) return;
 
@@ -251,6 +252,9 @@ const Views = {
       API.searchArtists(query, 5),
       API.searchAlbums(query, 6),
     ]);
+
+    // A later keystroke may have already rendered a new search view.
+    if (requestId !== this._searchRequestId || !container.isConnected) return;
 
     container.innerHTML = '';
 

@@ -47,6 +47,17 @@ YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 _url_cache: dict = {}
 _cache_lock = threading.Lock()
 CACHE_TTL = 3600
+SEARCH_CACHE_TTL = 600
+_http = req_lib.Session()
+
+# Search can return a music-category video that is still a reaction, a live
+# performance, or an editorial clip. Keep the catalogue focused on tracks.
+_NON_TRACK_PATTERN = re.compile(
+    r"\b(?:official\s+(?:music\s+)?video|music\s+video|clip\s+officiel|"
+    r"reaction|r[ée]agit|live|concert|interview|podcast|trailer|teaser|"
+    r"making\s+of|behind\s+the\s+scenes|tutorial|commentary)\b",
+    re.IGNORECASE,
+)
 
 
 def _with_youtube_cookies(options: dict) -> dict:
@@ -132,7 +143,7 @@ def _youtube_api_get(resource: str, params: dict) -> dict:
         raise RuntimeError("YOUTUBE_API_KEY absente")
 
     query = {**params, "key": YOUTUBE_API_KEY}
-    response = req_lib.get(
+    response = _http.get(
         f"{YOUTUBE_API_BASE}/{resource}",
         params=query,
         timeout=12,
@@ -149,7 +160,9 @@ def _search_youtube_api(term: str, limit: int) -> list:
             "q": term,
             "type": "video",
             "videoCategoryId": "10",
-            "maxResults": min(max(limit, 1), 50),
+            # Retrieve a little more than requested so that non-track videos
+            # can be removed without leaving the results view sparse.
+            "maxResults": min(max(limit * 2, 12), 50),
             "safeSearch": "none",
         },
     )
@@ -181,10 +194,23 @@ def _search_youtube_api(term: str, limit: int) -> list:
     tracks = []
     for video_id in video_ids:
         item = by_id.get(video_id)
-        if item:
+        if item and _is_track_result(item):
             tracks.append(_normalize_youtube_video(item))
+        if len(tracks) >= limit:
+            break
 
     return tracks
+
+
+def _is_track_result(video: dict) -> bool:
+    """Reject YouTube visual/editorial content from the music catalogue."""
+    snippet = video.get("snippet") or {}
+    text = " ".join((
+        str(snippet.get("title") or ""),
+        str(snippet.get("description") or ""),
+        str(snippet.get("channelTitle") or ""),
+    ))
+    return not _NON_TRACK_PATTERN.search(text)
 
 
 def _get_youtube_video_api(video_id: str):
@@ -222,10 +248,15 @@ def _search_ytdlp(term: str, limit: int) -> list:
         if not video_id:
             continue
 
+        title = entry.get("title", "Inconnu")
+        channel = entry.get("uploader") or entry.get("channel") or ""
+        if _NON_TRACK_PATTERN.search(f"{title} {channel}"):
+            continue
+
         tracks.append({
             "trackId": f"yt_{video_id}",
-            "trackName": entry.get("title", "Inconnu"),
-            "artistName": entry.get("uploader") or entry.get("channel") or "Artiste inconnu",
+            "trackName": title,
+            "artistName": channel or "Artiste inconnu",
             "collectionName": "",
             "collectionId": "",
             "artworkUrl": f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
@@ -417,7 +448,7 @@ def _proxy_stream(video_id: str, media_kind: str = "audio"):
         if "Range" in request.headers:
             forward_headers["Range"] = request.headers["Range"]
 
-        upstream = req_lib.get(
+        upstream = _http.get(
             media_url,
             headers=forward_headers,
             stream=True,
@@ -486,16 +517,34 @@ def search():
     if not term:
         return jsonify([])
 
+    cache_key = f"search:{term.casefold()}:{limit}"
+    now = time.time()
+    with _cache_lock:
+        cached = _url_cache.get(cache_key)
+        if cached and cached["exp"] > now:
+            response = jsonify(cached["value"])
+            response.headers["Cache-Control"] = "public, max-age=300"
+            return response
+
     if YOUTUBE_API_KEY:
         try:
             tracks = _search_youtube_api(term, limit)
             if tracks:
-                return jsonify(tracks)
+                with _cache_lock:
+                    _url_cache[cache_key] = {"value": tracks, "exp": now + SEARCH_CACHE_TTL}
+                response = jsonify(tracks)
+                response.headers["Cache-Control"] = "public, max-age=300"
+                return response
         except Exception as exc:
             print(f"[NexSon] YouTube Data API search failed: {exc}")
 
     try:
-        return jsonify(_search_ytdlp(term, limit))
+        tracks = _search_ytdlp(term, limit)
+        with _cache_lock:
+            _url_cache[cache_key] = {"value": tracks, "exp": now + SEARCH_CACHE_TTL}
+        response = jsonify(tracks)
+        response.headers["Cache-Control"] = "public, max-age=300"
+        return response
     except Exception as exc:
         traceback.print_exc()
         return jsonify({"error": str(exc)}), 500

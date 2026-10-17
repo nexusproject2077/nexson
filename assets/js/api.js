@@ -6,6 +6,7 @@
 
 const API = {
   _cache: {},
+  _pendingSearches: {},
   // Indexes built from VPS search responses.  The VPS exposes a track search
   // endpoint, so artist/album cards are derived from that same authoritative
   // response instead of making browser-side Jamendo requests.
@@ -417,24 +418,27 @@ const API = {
 
   /* ── Main search — NexSon VPS first, legacy fallbacks only if no VPS is configured ── */
   async search(term, limit = 25) {
-    const cacheKey = `search_${term}_${limit}`;
+    const normalizedTerm = String(term || '').trim();
+    const cacheKey = `search_${normalizedTerm.toLocaleLowerCase()}_${limit}`;
     if (this._cache[cacheKey]) return this._cache[cacheKey];
+    if (this._pendingSearches[cacheKey]) return this._pendingSearches[cacheKey];
 
     // Production: the HTTPS NexSon API is authoritative.
     // Avoid calling public Invidious/CORS proxies when the VPS is configured.
     if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
-      try {
-        const custom = await this._searchCustom(term, limit);
-        if (custom.length > 0) {
-          this._cache[cacheKey] = custom;
+      const request = this._searchCustom(normalizedTerm, limit)
+        .then(custom => {
+          if (custom.length > 0) this._cache[cacheKey] = custom;
+          else console.warn(`[NexSon] API VPS: aucun résultat pour "${normalizedTerm}"`);
           return custom;
-        }
-        console.warn(`[NexSon] API VPS: aucun résultat pour "${term}"`);
-        return [];
-      } catch (e) {
-        console.warn('[NexSon] API VPS indisponible:', e.message);
-        return [];
-      }
+        })
+        .catch(e => {
+          console.warn('[NexSon] API VPS indisponible:', e.message);
+          return [];
+        })
+        .finally(() => { delete this._pendingSearches[cacheKey]; });
+      this._pendingSearches[cacheKey] = request;
+      return request;
     }
 
     // Local/dev fallback
@@ -507,7 +511,8 @@ const API = {
 
     if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
       try {
-        const tracks = this._cache[`search_${term}_24`] || await this.search(term, Math.max(limit * 4, 20));
+        const normalizedTerm = String(term || '').trim().toLocaleLowerCase();
+        const tracks = this._cache[`search_${normalizedTerm}_24`] || await this.search(term, 24);
         const results = this._artistsFromTracks(tracks, limit);
         this._cache[cacheKey] = results;
         return results;
@@ -603,7 +608,8 @@ const API = {
     if (this._cache[cacheKey]) return this._cache[cacheKey];
     if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
       try {
-        const tracks = this._cache[`search_${term}_24`] || await this.search(term, Math.max(limit * 4, 20));
+        const normalizedTerm = String(term || '').trim().toLocaleLowerCase();
+        const tracks = this._cache[`search_${normalizedTerm}_24`] || await this.search(term, 24);
         const results = this._albumsFromTracks(tracks, limit);
         this._cache[cacheKey] = results;
         return results;

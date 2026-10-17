@@ -20,7 +20,7 @@ const Search = {
         Router.navigate('search');
       }
       Views.renderSearch(value.trim());
-    }, 350);
+    }, 220);
   },
 
   /* ── Handle keyboard ── */
