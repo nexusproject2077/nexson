@@ -9,6 +9,7 @@ const Router = {
   /* ── Navigate to a view ── */
   navigate(route, params = {}) {
     UI.setActiveNav(route);
+    document.body.classList.toggle('home-route', route === 'home');
     UI.scrollTop();
 
     document.getElementById('user-dropdown')?.classList.add('hidden');
@@ -48,6 +49,7 @@ const Router = {
     const { route, params } = this._history[this._historyIdx];
     window._currentRoute = route;
     UI.setActiveNav(route);
+    document.body.classList.toggle('home-route', route === 'home');
     UI.scrollTop();
     this._render(route, params);
     this._updateNavBtns();
@@ -61,6 +63,7 @@ const Router = {
     const { route, params } = this._history[this._historyIdx];
     window._currentRoute = route;
     UI.setActiveNav(route);
+    document.body.classList.toggle('home-route', route === 'home');
     UI.scrollTop();
     this._render(route, params);
     this._updateNavBtns();

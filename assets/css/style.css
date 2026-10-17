@@ -496,6 +496,12 @@ img { display: block; max-width: 100%; }
 .topbar-left { display: flex; align-items: center; gap: 12px; flex: 1; }
 .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .mobile-primary-nav { display: none; }
+#home-settings-btn { display: none; }
+
+/* The home view keeps its header focused: navigation and settings only. */
+.home-route .topbar-search-wrap,
+.home-route .mobile-search-btn { display: none !important; }
+.home-route #home-settings-btn { display: flex; }
 
 .btn-icon {
   width: 36px; height: 36px;
