@@ -1160,6 +1160,9 @@ img { display: block; max-width: 100%; }
 .search-empty svg { opacity: 0.4; }
 .search-empty h3 { font-size: 22px; font-weight: 700; color: var(--text-secondary); }
 .search-empty p { font-size: 15px; }
+.search-help { color: var(--text-muted); margin: -20px 0 28px; font-size: 13px; line-height: 1.6; }
+.search-help code { color: var(--text-secondary); background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 5px; padding: 2px 5px; white-space: nowrap; }
+.search-filter-summary { color: var(--purple-300); font-size: 13px; margin: -8px 0 20px; }
 
 .genres-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px;

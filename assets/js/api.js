@@ -14,6 +14,75 @@ const API = {
   _customArtists: {},
   _customAlbums: {},
 
+  _searchText(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().trim();
+  },
+
+  parseSearchQuery(query) {
+    const raw = String(query || '').trim();
+    const filters = { artist: '', album: '', genre: '', yearFrom: 0, yearTo: 0 };
+    let remaining = raw;
+
+    remaining = remaining.replace(/\b(artist|album|genre):(?:"([^"]+)"|([^\s]+))/gi, (_, key, quoted, bare) => {
+      filters[key.toLocaleLowerCase()] = (quoted || bare || '').trim();
+      return ' ';
+    });
+    remaining = remaining.replace(/\byear:(\d{4})(?:-(\d{4}))?/gi, (_, from, to) => {
+      filters.yearFrom = Number(from);
+      filters.yearTo = Number(to || from);
+      return ' ';
+    });
+
+    const term = remaining.replace(/\s+/g, ' ').trim();
+    const lookup = term || filters.artist || filters.album || filters.genre || raw;
+    return { raw, term, lookup, ...filters };
+  },
+
+  rankAndFilterTracks(tracks, query) {
+    const spec = typeof query === 'string' ? this.parseSearchQuery(query) : query;
+    const term = this._searchText(spec.term);
+    const artistFilter = this._searchText(spec.artist);
+    const albumFilter = this._searchText(spec.album);
+    const genreFilter = this._searchText(spec.genre);
+
+    return tracks
+      .filter(track => {
+        const artist = this._searchText(track.artistName);
+        const album = this._searchText(track.collectionName);
+        const genre = this._searchText(track.genre);
+        const year = new Date(track.releaseDate || '').getFullYear() || 0;
+        if (artistFilter && !artist.includes(artistFilter)) return false;
+        if (albumFilter && !album.includes(albumFilter)) return false;
+        // YouTube often only exposes the generic Music category. In that
+        // case the lookup query remains the reliable genre signal.
+        if (genreFilter && genre && genre !== 'music' && !genre.includes(genreFilter)) return false;
+        if (spec.yearFrom && (!year || year < spec.yearFrom || year > spec.yearTo)) return false;
+        return true;
+      })
+      .map(track => {
+        const title = this._searchText(track.trackName);
+        const artist = this._searchText(track.artistName);
+        const album = this._searchText(track.collectionName);
+        let score = 0;
+        if (term) {
+          if (title === term) score += 10000;
+          else if (artist === term) score += 9000;
+          else if (album === term) score += 8000;
+          else if (title.startsWith(term)) score += 5000;
+          else if (artist.startsWith(term)) score += 4000;
+          else if (album.startsWith(term)) score += 3000;
+          else if (title.includes(term)) score += 1800;
+          else if (artist.includes(term)) score += 1500;
+          else if (album.includes(term)) score += 1200;
+        }
+        if (artistFilter && artist === artistFilter) score += 2000;
+        if (albumFilter && album === albumFilter) score += 1800;
+        return { track, score };
+      })
+      .sort((a, b) => b.score - a.score || (b.track.duration || 0) - (a.track.duration || 0))
+      .map(({ track }) => track);
+  },
+
   /* ══════════════════════════════════════════
      HELPER : fetch JSON avec fallback CORS proxies
      Les instances publiques Invidious/Piped bloquent CORS

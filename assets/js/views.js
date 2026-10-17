@@ -219,6 +219,7 @@ const Views = {
     if (!query) {
       content.innerHTML = `
         <h2 style="font-size:28px;font-weight:800;margin-bottom:32px">Parcourir</h2>
+        <p class="search-help">Astuce : <code>artist:"Daft Punk" year:2000-2010</code>, <code>genre:rock</code> ou <code>album:"Discovery"</code>.</p>
         <div class="section-header" style="margin-bottom:16px">
           <span class="section-title" style="font-size:18px">Genres & ambiances</span>
         </div>
@@ -243,20 +244,27 @@ const Views = {
     const container = document.getElementById('search-results');
     if (!container) return;
 
-    // The VPS returns tracks.  Fetch it once, then let the API derive the
-    // artist and album sections from the cached authoritative response.
-    // 24 also covers the 6 album candidates below (6 × 4 tracks), keeping
-    // the whole search view to a single VPS request.
-    const songs = (await API.searchSongs(query, 24)).slice(0, 20);
-    const [artists, albums] = await Promise.all([
-      API.searchArtists(query, 5),
-      API.searchAlbums(query, 6),
-    ]);
+    // One VPS lookup powers titles, artists and albums. Local ranking makes
+    // exact matches immediately rise above partial YouTube matches.
+    const querySpec = API.parseSearchQuery(query);
+    const sourceTracks = await API.searchSongs(querySpec.lookup, 30);
+    const songs = API.rankAndFilterTracks(sourceTracks, querySpec).slice(0, 20);
+    const artists = API._artistsFromTracks(songs, 5);
+    const albums = API._albumsFromTracks(songs, 6);
 
     // A later keystroke may have already rendered a new search view.
     if (requestId !== this._searchRequestId || !container.isConnected) return;
 
     container.innerHTML = '';
+    const activeFilters = [
+      querySpec.artist && `artiste : ${querySpec.artist}`,
+      querySpec.album && `album : ${querySpec.album}`,
+      querySpec.genre && `genre : ${querySpec.genre}`,
+      querySpec.yearFrom && `année : ${querySpec.yearFrom}${querySpec.yearTo !== querySpec.yearFrom ? `–${querySpec.yearTo}` : ''}`,
+    ].filter(Boolean);
+    if (activeFilters.length) {
+      container.innerHTML = `<div class="search-filter-summary">Filtres actifs : ${activeFilters.map(UI.escape).join(' · ')}</div>`;
+    }
 
     // Top result
     const topResult = songs[0] || null;
