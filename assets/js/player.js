@@ -31,6 +31,7 @@ const Player = {
   _spatialTimer: null,
   _playRequestId: 0,
   _loadingTrackId: '',
+  _shouldResumeAfterBackground: false,
 
   init() {
     this.audio    = document.getElementById('audio-player');
@@ -92,6 +93,7 @@ const Player = {
     }
 
     this._initMediaSession();
+    this._initPlaybackResilience();
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => this._handleKey(e));
@@ -316,8 +318,28 @@ const Player = {
   },
 
   _resumeAudioEffects() {
+    // On mobile, a neutral Web Audio graph can make Safari suspend a perfectly
+    // valid HTML audio stream shortly after the app is backgrounded. Keep the
+    // native media path unless the listener explicitly turns on an effect.
+    if (this._shouldKeepNativeMobileAudio()) return;
     this._ensureAudioEffects();
     if (this._audioContext?.state === 'suspended') this._audioContext.resume().catch(() => {});
+  },
+
+  _isMobileDevice() {
+    return window.matchMedia?.('(pointer: coarse)').matches
+      || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  },
+
+  _hasActiveAudioEffect() {
+    const state = this._eqState;
+    if (!state) return false;
+    const adjustedBand = state.enabled && state.bands.some(value => Number(value) !== 0);
+    return adjustedBand || state.spatial !== 'off';
+  },
+
+  _shouldKeepNativeMobileAudio() {
+    return this._isMobileDevice() && !this._audioContext && !this._hasActiveAudioEffect();
   },
 
   _ensureAudioEffects() {
@@ -372,6 +394,7 @@ const Player = {
     this._eqState.preset = 'custom';
     this._eqState.bands[index] = Math.max(-12, Math.min(12, Number(value) || 0));
     Store.setEqualizer(this._eqState);
+    this._ensureAudioEffects();
     this._applyEqualizer();
     const output = document.getElementById(`eq-band-${index}-value`);
     if (output) output.textContent = `${this._eqState.bands[index] > 0 ? '+' : ''}${this._eqState.bands[index]} dB`;
@@ -389,6 +412,7 @@ const Player = {
     if (!presets[preset]) return;
     this._eqState = { ...this._eqState, enabled: true, preset, bands: [...presets[preset]] };
     Store.setEqualizer(this._eqState);
+    this._ensureAudioEffects();
     this._applyEqualizer();
     document.querySelectorAll('[data-eq-band]').forEach(input => {
       const index = Number(input.dataset.eqBand);
@@ -402,6 +426,7 @@ const Player = {
     if (!['off', '3d', '8d'].includes(mode)) return;
     this._eqState.spatial = mode;
     Store.setEqualizer(this._eqState);
+    if (mode !== 'off') this._ensureAudioEffects();
     this._startSpatialEffect();
   },
 
@@ -830,6 +855,22 @@ const Player = {
       if (!media || typeof details.seekTime !== 'number') return;
       media.currentTime = details.seekTime;
     });
+  },
+
+  _initPlaybackResilience() {
+    // Never pause just because the tab lost focus. Remember an active stream
+    // before backgrounding so an OS suspension can be recovered on return.
+    const restorePlayback = () => {
+      const media = this._activeMedia();
+      if (!this._shouldResumeAfterBackground || !media?.paused || !media.src) return;
+      media.play().then(() => { this._shouldResumeAfterBackground = false; }).catch(() => {});
+    };
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.isPlaying) this._shouldResumeAfterBackground = true;
+      if (!document.hidden) restorePlayback();
+    });
+    window.addEventListener('pageshow', restorePlayback);
   },
 
   _updateMediaSession(track) {
