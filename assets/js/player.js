@@ -32,6 +32,7 @@ const Player = {
   _playRequestId: 0,
   _loadingTrackId: '',
   _shouldResumeAfterBackground: false,
+  _lastPlaybackPersistAt: 0,
 
   init() {
     this.audio    = document.getElementById('audio-player');
@@ -78,6 +79,8 @@ const Player = {
     this._bindAudioElement(this.audio);
     if (this.nextAudio) this._bindAudioElement(this.nextAudio);
 
+    this._restoreSavedPlayback();
+
     if (this.video) {
       this.video.addEventListener('timeupdate', () => this._onTimeUpdate(this.video));
       this.video.addEventListener('ended', () => this._onVideoEnded());
@@ -112,6 +115,7 @@ const Player = {
     media.addEventListener('pause', () => {
       if (isActive() && !this._isCrossfading) {
         this.isPlaying = false;
+        this._persistPlayback();
         this._updatePlayUI(false);
         this._emitState('pause');
       }
@@ -197,7 +201,11 @@ const Player = {
   /* ── Toggle play/pause ── */
   toggle() {
     const media = this._activeMedia();
-    if (!media?.src) return;
+    if (!media?.src) {
+      const track = this.currentTrack();
+      if (track) this.playTrack(track);
+      return;
+    }
     this._resumeAudioEffects();
     if (this.isPlaying) media.pause();
     else media.play();
@@ -871,6 +879,50 @@ const Player = {
       if (!document.hidden) restorePlayback();
     });
     window.addEventListener('pageshow', restorePlayback);
+    window.addEventListener('pagehide', () => this._persistPlayback());
+  },
+
+  async _restoreSavedPlayback() {
+    const track = this.currentTrack();
+    const saved = Store.getPlayback();
+    if (!track || !saved || String(saved.trackId) !== String(track.trackId)) return;
+
+    const position = Math.max(0, Number(saved.position) || 0);
+    this._setLoading(true);
+    try {
+      // Obtain a fresh proxy URL: old media URLs can no longer be valid after
+      // a browser reload, whereas the saved track data remains usable.
+      const streamUrl = await API.resolveTrackStream(track, true);
+      if (this.currentTrack()?.trackId !== track.trackId) return;
+      track.previewUrl = streamUrl;
+      Store.setQueue(this.queue);
+      this.audio.src = streamUrl;
+      this.audio.addEventListener('loadedmetadata', () => {
+        const lastSafeSecond = Math.max(0, (this.audio.duration || 0) - 0.1);
+        this.audio.currentTime = Math.min(position, lastSafeSecond || position);
+        this._onTimeUpdate(this.audio);
+      }, { once: true });
+      this.audio.load();
+      this._updateMediaSession(track);
+    } catch (error) {
+      // The visible track and play button remain usable: toggle() resolves it
+      // again if the proxy was temporarily unavailable during startup.
+      track.previewUrl = '';
+      this._setLoading(false);
+      console.warn('[NexSon] Playback restore failed:', error);
+    }
+  },
+
+  _persistPlayback() {
+    const track = this.currentTrack();
+    const media = this._activeMedia();
+    if (!track || !media || !Number.isFinite(media.currentTime)) return;
+    Store.setPlayback({
+      trackId: track.trackId,
+      position: Math.max(0, media.currentTime),
+      savedAt: Date.now(),
+    });
+    this._lastPlaybackPersistAt = media.currentTime;
   },
 
   _updateMediaSession(track) {
@@ -938,6 +990,7 @@ const Player = {
     }
 
     this._syncMediaPosition();
+    if (Math.abs(currentTime - this._lastPlaybackPersistAt) >= 5) this._persistPlayback();
     Lyrics.sync(currentTime);
     this._emitState('timeupdate');
   },

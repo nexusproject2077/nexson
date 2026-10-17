@@ -13,6 +13,7 @@ const Store = {
     RECENT:         'nexson_recent',
     QUEUE:          'nexson_queue',
     QUEUE_IDX:      'nexson_queue_idx',
+    PLAYBACK:       'nexson_playback',
     SHUFFLE:        'nexson_shuffle',
     REPEAT:         'nexson_repeat',
     VOLUME:         'nexson_volume',
@@ -217,4 +218,7 @@ const Store = {
   setQueue(q)    { this._set(this.KEYS.QUEUE, q); },
   getQueueIdx()  { return this._get(this.KEYS.QUEUE_IDX, 0); },
   setQueueIdx(i) { this._set(this.KEYS.QUEUE_IDX, i); },
+  getPlayback()  { return this._get(this.KEYS.PLAYBACK, null); },
+  setPlayback(v) { this._set(this.KEYS.PLAYBACK, v); },
+  clearPlayback(){ this._del(this.KEYS.PLAYBACK); },
 };
