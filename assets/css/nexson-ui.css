@@ -225,9 +225,10 @@ body{
 .player-btn-play:hover{ transform:scale(1.07); background:#fff; color:#07080c; }
 .player-btn-play:active{ transform:scale(.96); }
 .player-btn-play.loading{
-  background:transparent;
-  color:var(--text-primary);
-  box-shadow:none;
+  /* Loading must never make the primary control disappear. */
+  background:#fff;
+  color:#07080c;
+  box-shadow:0 6px 20px -6px rgba(0,0,0,.9);
 }
 .progress-bar{
   background:rgba(255,255,255,.12);
