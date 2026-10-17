@@ -29,11 +29,16 @@ const Player = {
   _audioNodes: new Map(),
   _eqState: null,
   _spatialTimer: null,
+  _playRequestId: 0,
+  _loadingTrackId: '',
 
   init() {
     this.audio    = document.getElementById('audio-player');
     this.nextAudio = document.getElementById('audio-crossfade');
     this.video    = document.getElementById('video-player');
+    [this.audio, this.nextAudio, this.video].filter(Boolean).forEach(media => {
+      media.crossOrigin = 'anonymous';
+    });
     this.shuffle  = Store.getShuffle();
     this.repeat   = Store.getRepeat();
     const vol     = Store.getVolume();
@@ -110,7 +115,7 @@ const Player = {
       }
     });
     media.addEventListener('playing', () => {
-      if (isActive()) { this._setLoading(false); this._emitState('playing'); }
+      if (isActive()) { this._loadingTrackId = ''; this._setLoading(false); this._emitState('playing'); }
     });
     media.addEventListener('waiting', () => { if (isActive()) this._setLoading(true); });
     media.addEventListener('stalled', () => { if (isActive()) this._setLoading(true); });
@@ -121,6 +126,12 @@ const Player = {
   /* ── Play a track ── */
   async playTrack(track, queue = null, idx = 0) {
     if (!track) return;
+    const trackId = String(track.trackId || '');
+    const activeTrack = this.currentTrack();
+    if (this._loadingTrackId === trackId) return;
+    if (activeTrack?.trackId === trackId && this.audio?.src && !this.audio.paused) return;
+    const requestId = ++this._playRequestId;
+    this._loadingTrackId = trackId;
     this._resumeAudioEffects();
     if (this._videoMode) this.closeVideo(false);
     this._cancelCrossfade();
@@ -142,6 +153,7 @@ const Player = {
 
       try {
         const streamUrl = await API.resolveTrackStream(track);
+        if (requestId !== this._playRequestId) return;
         track.previewUrl = streamUrl;
 
         const qi = this.queue.findIndex(t => t.trackId === track.trackId);
@@ -149,6 +161,8 @@ const Player = {
 
         Store.setQueue(this.queue);
       } catch (e) {
+        if (requestId !== this._playRequestId) return;
+        this._loadingTrackId = '';
         this._setLoading(false);
         console.error('[NexSon] Stream resolve failed:', e.message);
         UI.toast('Impossible de charger ce titre — essaie le suivant', 'error');
@@ -156,11 +170,15 @@ const Player = {
       }
     }
 
+    if (requestId !== this._playRequestId) return;
+
     console.info(`[NexSon] Lecture : ${track.trackName} | source: ${track.source} | url: ${track.previewUrl}`);
 
     this.audio.src = track.previewUrl;
     this.audio.load();
     this.audio.play().catch(err => {
+      if (err?.name === 'AbortError' || requestId !== this._playRequestId) return;
+      this._loadingTrackId = '';
       console.error('[NexSon] Playback error:', err);
       UI.toast('Impossible de lire ce titre — essaie le suivant', 'error');
     });
@@ -862,6 +880,7 @@ const Player = {
   },
 
   _onError() {
+    this._loadingTrackId = '';
     UI.toast('Erreur lors de la lecture', 'error');
     this._updatePlayUI(false);
   },

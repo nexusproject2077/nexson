@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#07080c">
   <meta name="application-name" content="NexSon">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="manifest" href="manifest.webmanifest">
   <title>NexSon – Premium Music Streaming</title>
@@ -334,7 +335,7 @@
 <!-- Clip video -->
 <div class="video-overlay hidden" id="video-overlay" role="dialog" aria-modal="true" aria-label="Clip vidéo">
   <div class="video-stage">
-    <video id="video-player" playsinline preload="metadata"></video>
+    <video id="video-player" playsinline preload="metadata" crossorigin="anonymous"></video>
     <div class="video-stage-header">
       <div class="video-stage-meta">
         <strong id="video-track-name">Clip vidéo</strong>
@@ -440,8 +441,8 @@
 <div class="toast-container" id="toast-container"></div>
 
 <!-- Audio Element -->
-<audio id="audio-player" preload="auto"></audio>
-<audio id="audio-crossfade" preload="auto"></audio>
+<audio id="audio-player" preload="auto" crossorigin="anonymous"></audio>
+<audio id="audio-crossfade" preload="auto" crossorigin="anonymous"></audio>
 
 <!-- ═══════════════════════════════════ SCRIPTS ═══ -->
 <script src="assets/js/runtime-config.js"></script>

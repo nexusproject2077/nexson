@@ -7,6 +7,7 @@
 const API = {
   _cache: {},
   _pendingSearches: {},
+  _lyricsProviderCooldownUntil: 0,
   // Indexes built from VPS search responses.  The VPS exposes a track search
   // endpoint, so artist/album cards are derived from that same authoritative
   // response instead of making browser-side Jamendo requests.
@@ -742,6 +743,7 @@ const API = {
     // LRCLIB is a free, CORS-enabled source that can return timed LRC lyrics.
     // Try the exact signature first, then a lightweight search fallback.
     try {
+      if (Date.now() < this._lyricsProviderCooldownUntil) throw new Error('LRCLIB temporairement indisponible');
       const params = new URLSearchParams({ track_name: title, artist_name: artist });
       if (album) params.set('album_name', album);
       if (duration > 0) params.set('duration', String(Math.round(duration)));
@@ -757,6 +759,7 @@ const API = {
         };
         if (lyrics.plain || lyrics.synced) return (this._cache[cacheKey] = lyrics);
       }
+      if (response.status >= 500) this._lyricsProviderCooldownUntil = Date.now() + 120000;
     } catch (_) {}
 
     // Keep the previous free source as a fallback for tracks LRCLIB lacks.
