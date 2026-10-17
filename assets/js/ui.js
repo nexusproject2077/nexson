@@ -251,7 +251,7 @@ const UI = {
   updateQueuePanel() {
     const list = document.getElementById('queue-list');
     if (!list) return;
-    const { queue, queueIdx } = Player;
+    const { queue } = Player;
 
     if (!queue.length) {
       list.innerHTML = `
@@ -262,26 +262,20 @@ const UI = {
       return;
     }
 
-    list.innerHTML = queue.map((t, i) => `
-      <div class="queue-item ${i === queueIdx ? 'current' : ''}" onclick="Player.playQueueAt(${i})">
-        <span class="qi-num">
-          ${i === queueIdx
-            ? `<div class="now-playing-bars" style="justify-content:center"><span></span><span></span><span></span></div>`
-            : i + 1
-          }
-        </span>
-        <div class="qi-cover">
-          ${t.artworkSmall || t.artworkUrl
-            ? `<img src="${t.artworkSmall || t.artworkUrl}" alt="${UI.escape(t.trackName)}" loading="lazy">`
-            : ''
-          }
-        </div>
-        <div class="qi-info">
-          <div class="qi-name">${UI.escape(t.trackName)}</div>
-          <div class="qi-artist">${UI.escape(t.artistName)}</div>
-        </div>
-      </div>
-    `).join('');
+    const sections = Player.getQueueSections();
+    const row = (item, kind = 'auto', order = 0) => {
+      const { track: t, index } = item;
+      return `<div class="queue-item ${kind === 'current' ? 'current' : ''} ${kind === 'manual' ? 'queue-item-manual' : ''}" onclick="Player.playQueueAt(${index})" ${kind === 'manual' ? `draggable="true" ondragstart="Player.startManualQueueDrag(event,${index})" ondragover="event.preventDefault()" ondrop="Player.dropManualQueueItem(event,${index})"` : ''}>
+        <span class="qi-num">${kind === 'current' ? `<div class="now-playing-bars" style="justify-content:center"><span></span><span></span><span></span></div>` : order + 1}</span>
+        <div class="qi-cover">${t.artworkSmall || t.artworkUrl ? `<img src="${t.artworkSmall || t.artworkUrl}" alt="${UI.escape(t.trackName)}" loading="lazy">` : ''}</div>
+        <div class="qi-info"><div class="qi-name">${UI.escape(t.trackName)}</div><div class="qi-artist">${UI.escape(t.artistName)}</div></div>
+        ${kind === 'manual' ? `<div class="queue-actions" onclick="event.stopPropagation()"><button onclick="Player.moveManualQueueItem(${index},${index - 1})" ${order === 0 ? 'disabled' : ''} title="Monter">↑</button><button onclick="Player.moveManualQueueItem(${index},${index + 1})" ${order === sections.manual.length - 1 ? 'disabled' : ''} title="Descendre">↓</button><button onclick="Player.removeFromQueue(${index})" title="Retirer">×</button></div>` : ''}
+      </div>`;
+    };
+    const current = sections.current ? row({ track: sections.current, index: sections.currentIndex }, 'current') : '';
+    const manual = sections.manual.length ? `<h4 class="queue-section-title">Prochain titre <span>Vos choix</span></h4>${sections.manual.map((item, i) => row(item, 'manual', i)).join('')}` : '';
+    const automatic = sections.automatic.length ? `<h4 class="queue-section-title">Ensuite à partir de votre sélection</h4>${sections.automatic.map((item, i) => row(item, 'auto', i)).join('')}` : '';
+    list.innerHTML = `<h4 class="queue-section-title">En cours de lecture</h4>${current}${manual}${automatic}`;
   },
 
   /* ── Render sidebar playlists ── */

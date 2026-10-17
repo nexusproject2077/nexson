@@ -136,9 +136,9 @@ const Player = {
     if (this._videoMode) this.closeVideo(false);
     this._cancelCrossfade();
     if (queue) {
-      this.queue    = queue;
+      this.queue    = queue.map(item => ({ ...item, queueOrigin: item.queueOrigin || 'auto' }));
       this.queueIdx = idx;
-      Store.setQueue(queue);
+      Store.setQueue(this.queue);
     } else if (!this.queue.length) {
       this.queue    = [track];
       this.queueIdx = 0;
@@ -422,7 +422,10 @@ const Player = {
   /* ── Next track ── */
   next() {
     if (!this.queue.length) return;
-    if (this.shuffle) {
+    const manualNext = this.queue.findIndex((track, index) => index > this.queueIdx && track.queueOrigin === 'manual');
+    if (manualNext !== -1) {
+      this.queueIdx = manualNext;
+    } else if (this.shuffle) {
       const curPos = this._shuffleOrder.indexOf(this.queueIdx);
       const nextPos = (curPos + 1) % this._shuffleOrder.length;
       this.queueIdx = this._shuffleOrder[nextPos];
@@ -596,6 +599,8 @@ const Player = {
 
   _nextQueueIndex() {
     if (!this.queue.length || this.repeat === 'one') return null;
+    const manualNext = this.queue.findIndex((track, index) => index > this.queueIdx && track.queueOrigin === 'manual');
+    if (manualNext !== -1) return manualNext;
     if (this.shuffle) {
       const current = this._shuffleOrder.indexOf(this.queueIdx);
       if (current < 0 || !this._shuffleOrder.length) return null;
@@ -695,7 +700,10 @@ const Player = {
 
   /* ── Add to queue ── */
   addToQueue(track) {
-    this.queue.push(track);
+    const queuedTrack = { ...track, queueOrigin: 'manual' };
+    let insertAt = this.queueIdx + 1;
+    while (this.queue[insertAt]?.queueOrigin === 'manual') insertAt++;
+    this.queue.splice(insertAt, 0, queuedTrack);
     Store.setQueue(this.queue);
     this._buildShuffleOrder();
     UI.updateQueuePanel();
@@ -711,6 +719,42 @@ const Player = {
     Store.setQueueIdx(this.queueIdx);
     this._buildShuffleOrder();
     UI.updateQueuePanel();
+  },
+
+  moveManualQueueItem(fromIdx, toIdx) {
+    if (fromIdx === this.queueIdx || toIdx === this.queueIdx) return;
+    const track = this.queue[fromIdx];
+    if (!track || track.queueOrigin !== 'manual' || this.queue[toIdx]?.queueOrigin !== 'manual') return;
+    this.queue.splice(fromIdx, 1);
+    this.queue.splice(toIdx, 0, track);
+    Store.setQueue(this.queue);
+    this._buildShuffleOrder();
+    UI.updateQueuePanel();
+  },
+
+  startManualQueueDrag(event, index) {
+    if (this.queue[index]?.queueOrigin !== 'manual') return;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+  },
+
+  dropManualQueueItem(event, toIdx) {
+    event.preventDefault();
+    const fromIdx = Number(event.dataTransfer.getData('text/plain'));
+    if (Number.isInteger(fromIdx)) this.moveManualQueueItem(fromIdx, toIdx);
+  },
+
+  getQueueSections() {
+    const current = this.currentTrack();
+    const upcoming = this.queue.slice(this.queueIdx + 1);
+    return {
+      current,
+      currentIndex: this.queueIdx,
+      manual: upcoming.map((track, offset) => ({ track, index: this.queueIdx + offset + 1 }))
+        .filter(item => item.track.queueOrigin === 'manual'),
+      automatic: upcoming.map((track, offset) => ({ track, index: this.queueIdx + offset + 1 }))
+        .filter(item => item.track.queueOrigin !== 'manual'),
+    };
   },
 
   /* ── Get current track ── */

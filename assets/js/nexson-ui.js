@@ -311,22 +311,24 @@ const NowPlaying = {
   _renderTab() {
     const body = this._el.querySelector('[data-np="tabbody"]');
     if (this._tab === 'queue') {
-      const { queue, queueIdx } = Player;
-      body.innerHTML = queue.length
-        ? queue.map((t, i) => `
-            <button class="nx-np-row ${i === queueIdx ? 'current' : ''}" onclick="Player.playQueueAt(${i})">
-              <span class="nx-np-row-num">${i === queueIdx
-                ? '<span class="now-playing-bars"><span></span><span></span><span></span></span>'
-                : i + 1}</span>
-              <span class="nx-np-row-cover">${t.artworkSmall || t.artworkUrl
-                ? `<img src="${t.artworkSmall || t.artworkUrl}" alt="" loading="lazy">` : ''}</span>
-              <span class="nx-np-row-info">
-                <span class="nx-np-row-name">${UI.escape(t.trackName)}</span>
-                <span class="nx-np-row-artist">${UI.escape(t.artistName)}</span>
-              </span>
-              <span class="nx-np-row-dur">${Player._formatTime(t.duration || 0)}</span>
-            </button>`).join('')
-        : `<p class="nx-np-empty">La file d'attente est vide.</p>`;
+      const sections = Player.getQueueSections();
+      if (!sections.current) {
+        body.innerHTML = `<p class="nx-np-empty">La file d'attente est vide.</p>`;
+        return;
+      }
+      const row = (item, current = false) => {
+        const { track: t, index } = item;
+        return `<button class="nx-np-row ${current ? 'current' : ''}" onclick="Player.playQueueAt(${index})">
+          <span class="nx-np-row-num">${current ? '<span class="now-playing-bars"><span></span><span></span><span></span></span>' : index + 1}</span>
+          <span class="nx-np-row-cover">${t.artworkSmall || t.artworkUrl ? `<img src="${t.artworkSmall || t.artworkUrl}" alt="" loading="lazy">` : ''}</span>
+          <span class="nx-np-row-info"><span class="nx-np-row-name">${UI.escape(t.trackName)}</span><span class="nx-np-row-artist">${UI.escape(t.artistName)}</span></span>
+          <span class="nx-np-row-dur">${Player._formatTime(t.duration || 0)}</span>
+        </button>`;
+      };
+      const current = row({ track: sections.current, index: sections.currentIndex }, true);
+      const manual = sections.manual.length ? `<h4 class="nx-np-queue-title">Prochain titre · Vos choix</h4>${sections.manual.map(item => row(item)).join('')}` : '';
+      const automatic = sections.automatic.length ? `<h4 class="nx-np-queue-title">Ensuite à partir de votre sélection</h4>${sections.automatic.map(item => row(item)).join('')}` : '';
+      body.innerHTML = `<h4 class="nx-np-queue-title">En cours de lecture</h4>${current}${manual}${automatic}`;
       return;
     }
     this._loadLyrics();
