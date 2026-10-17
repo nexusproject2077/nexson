@@ -809,6 +809,26 @@ const API = {
     const cacheKey = `lyrics_${artist}_${title}_${duration}`;
     if (this._cache[cacheKey] !== undefined) return this._cache[cacheKey];
 
+    // Production lyrics are resolved by the VPS. Provider outages stay on
+    // the server and the browser receives one clean, cached response.
+    if (CONFIG.CUSTOM_MUSIC_API_ENABLED && CONFIG.CUSTOM_MUSIC_API) {
+      try {
+        const params = new URLSearchParams({ artist, title });
+        if (album) params.set('album', album);
+        if (duration > 0) params.set('duration', String(Math.round(duration)));
+        const data = await this._customFetch(`/lyrics?${params}`, { timeout: 9000 });
+        const lyrics = {
+          plain: data?.plain || '',
+          synced: data?.synced || '',
+          source: data?.source || '',
+        };
+        return (this._cache[cacheKey] = (lyrics.plain || lyrics.synced ? lyrics : null));
+      } catch (error) {
+        console.warn('[NexSon] Service de paroles indisponible:', error.message);
+        return (this._cache[cacheKey] = null);
+      }
+    }
+
     // LRCLIB is a free, CORS-enabled source that can return timed LRC lyrics.
     // Try the exact signature first, then a lightweight search fallback.
     try {

@@ -26,6 +26,7 @@ import re
 import time
 import threading
 import traceback
+from urllib.parse import quote
 
 from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
@@ -45,9 +46,11 @@ YOUTUBE_COOKIEFILE = os.getenv("YOUTUBE_COOKIEFILE", "").strip()
 YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 
 _url_cache: dict = {}
+_lyrics_cache: dict = {}
 _cache_lock = threading.Lock()
 CACHE_TTL = 3600
 SEARCH_CACHE_TTL = 600
+LYRICS_CACHE_TTL = 3600
 _http = req_lib.Session()
 
 # Search can return a music-category video that is still a reaction, a live
@@ -211,6 +214,56 @@ def _is_track_result(video: dict) -> bool:
         str(snippet.get("channelTitle") or ""),
     ))
     return not _NON_TRACK_PATTERN.search(text)
+
+
+def _get_lyrics(artist: str, title: str, album: str = "", duration: int = 0) -> dict:
+    """Fetch free lyrics server-side so provider failures never reach the UI."""
+    cache_key = f"{artist.casefold()}::{title.casefold()}::{duration}"
+    now = time.time()
+    with _cache_lock:
+        cached = _lyrics_cache.get(cache_key)
+        if cached and cached["exp"] > now:
+            return cached["value"]
+
+    result = {"plain": "", "synced": "", "source": ""}
+    try:
+        params = {"track_name": title, "artist_name": artist}
+        if album:
+            params["album_name"] = album
+        if duration > 0:
+            params["duration"] = duration
+        response = _http.get(
+            "https://lrclib.net/api/get",
+            params=params,
+            headers={"Lrclib-Client": "NexSon/2.0"},
+            timeout=6,
+        )
+        if response.ok:
+            data = response.json()
+            result = {
+                "plain": data.get("plainLyrics") or "",
+                "synced": data.get("syncedLyrics") or "",
+                "source": "LRCLIB",
+            }
+    except req_lib.RequestException:
+        pass
+
+    if not (result["plain"] or result["synced"]):
+        try:
+            response = _http.get(
+                f"https://api.lyrics.ovh/v1/{quote(artist, safe='')}/{quote(title, safe='')}",
+                timeout=6,
+            )
+            if response.ok:
+                data = response.json()
+                if data.get("lyrics"):
+                    result = {"plain": data["lyrics"], "synced": "", "source": "Lyrics.ovh"}
+        except req_lib.RequestException:
+            pass
+
+    with _cache_lock:
+        _lyrics_cache[cache_key] = {"value": result, "exp": now + LYRICS_CACHE_TTL}
+    return result
 
 
 def _get_youtube_video_api(video_id: str):
@@ -548,6 +601,20 @@ def search():
     except Exception as exc:
         traceback.print_exc()
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/lyrics")
+def lyrics():
+    artist = request.args.get("artist", "").strip()
+    title = request.args.get("title", "").strip()
+    album = request.args.get("album", "").strip()
+    try:
+        duration = max(0, int(request.args.get("duration", "0")))
+    except ValueError:
+        duration = 0
+    if not artist or not title:
+        return jsonify({"plain": "", "synced": "", "source": ""})
+    return jsonify(_get_lyrics(artist, title, album, duration))
 
 
 @app.route("/tracks/<video_id>")
