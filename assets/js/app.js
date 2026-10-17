@@ -91,6 +91,21 @@ async function init() {
   // Init player
   Player.init();
 
+  // Keep the header out of the way while content moves upward; it returns as
+  // soon as the user scrolls back toward the top.
+  const content = document.getElementById('page-content');
+  const topbar = document.getElementById('topbar');
+  if (content && topbar) {
+    let lastTop = 0;
+    content.addEventListener('scroll', () => {
+      const currentTop = content.scrollTop;
+      if (Math.abs(currentTop - lastTop) < 8) return;
+      topbar.classList.toggle('topbar-hidden', currentTop > lastTop && currentTop > 24);
+      if (currentTop <= 8) topbar.classList.remove('topbar-hidden');
+      lastTop = currentTop;
+    }, { passive: true });
+  }
+
   // Check auth session (async — handles JWT token too)
   const isLoggedIn = await Auth.checkSession();
   if (isLoggedIn) {
