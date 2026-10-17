@@ -495,7 +495,6 @@ img { display: block; max-width: 100%; }
 
 .topbar-left { display: flex; align-items: center; gap: 12px; flex: 1; }
 .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.mobile-primary-nav { display: none; }
 #home-settings-btn { display: none; }
 
 /* The home view keeps its header focused: navigation and settings only. */
@@ -1628,27 +1627,6 @@ img { display: block; max-width: 100%; }
   .topbar-search-wrap.mobile-open { transform: translateY(0); }
   .topbar-search { border-radius: var(--radius-full); }
   .mobile-search-btn { display: flex !important; }
-
-  .mobile-primary-nav {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    align-items: center;
-    gap: 4px;
-    min-height: 50px;
-    padding: 6px max(10px, var(--safe-right)) 6px max(10px, var(--safe-left));
-    background: rgba(15,15,28,.96);
-    border-bottom: 1px solid var(--border-subtle);
-  }
-  .mobile-nav-btn {
-    height: 38px;
-    display: grid;
-    place-items: center;
-    color: var(--text-muted);
-    border-radius: 10px;
-    transition: var(--trans-fast);
-  }
-  .mobile-nav-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
-  .mobile-nav-btn.active { color: white; background: rgba(139,92,246,.25); }
 
   /* — Auth — */
   .auth-card     { padding: 28px 20px; }
