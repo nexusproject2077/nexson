@@ -1261,7 +1261,11 @@ img { display: block; max-width: 100%; }
 }
 .sort-select:hover { border-color: var(--border-medium); }
 .playlist-sort-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 8px 0 14px; color: var(--text-muted); font-size: 13px; }
-.equalizer-settings { display: block; }
+.settings-row.equalizer-settings {
+  display: grid;
+  grid-template-columns: minmax(150px, .7fr) minmax(0, 1.3fr);
+  align-items: start;
+}
 .equalizer-heading { margin-bottom: 16px; }
 .equalizer-panel { background: rgba(255,255,255,.035); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px; }
 .equalizer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 13px; }
@@ -2359,12 +2363,48 @@ a {
     flex-direction: column;
   }
 
+  .settings-row.equalizer-settings {
+    display: block;
+    padding: 18px;
+  }
+
+  .equalizer-heading {
+    margin: 0 0 14px;
+  }
+
   .equalizer-toolbar .sort-select {
     width: 100%;
   }
 
   .equalizer-bands {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 12px;
+    margin: 16px 0 20px;
+  }
+
+  .equalizer-panel {
+    width: 100%;
+    padding: 16px;
+  }
+
+  .eq-band {
+    gap: 7px;
+    font-size: 12px;
+  }
+
+  .eq-band input {
+    min-height: 28px;
+  }
+
+  .spatial-audio > div {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .spatial-mode {
+    min-height: 42px;
+    padding: 0 6px;
   }
 
   .modal-overlay {
