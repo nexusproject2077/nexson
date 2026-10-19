@@ -1,6 +1,7 @@
 import unittest
 import sys
 import types
+from unittest.mock import patch
 
 
 class _App:
@@ -22,7 +23,7 @@ sys.modules.setdefault("requests", types.SimpleNamespace(Session=lambda: object(
 sys.modules.setdefault("yt_dlp", types.SimpleNamespace(YoutubeDL=object))
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
 
-from music_service import _is_track_result, _rank_music
+from music_service import _apply_album_artwork, _is_track_result, _rank_music
 
 
 def track(video_id, title, channel, **extra):
@@ -57,6 +58,21 @@ class MusicRankingTests(unittest.TestCase):
         reaction = {"snippet": {"title": "Artist - Song reaction", "channelTitle": "Viewer"}}
         self.assertTrue(_is_track_result(official_clip))
         self.assertFalse(_is_track_result(reaction))
+
+    def test_exact_song_and_artist_use_album_artwork(self):
+        song = track("cover", "The Weeknd - Blinding Lights (Official Audio)", "The Weeknd")
+        metadata = [{
+            "trackName": "Blinding Lights",
+            "artistName": "The Weeknd",
+            "collectionName": "After Hours",
+            "collectionId": 123,
+            "artworkUrl100": "https://cover.example/100x100bb.jpg",
+        }]
+        with patch("music_service._album_artwork_candidates", return_value=metadata):
+            result = _apply_album_artwork([song], "The Weeknd - Blinding Lights")[0]
+        self.assertEqual(result["artworkUrl"], "https://cover.example/600x600bb.jpg")
+        self.assertEqual(result["collectionName"], "After Hours")
+        self.assertEqual(result["videoArtworkUrl"], "")
 
 
 if __name__ == "__main__":
