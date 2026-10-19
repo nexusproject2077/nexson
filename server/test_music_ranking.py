@@ -1,0 +1,63 @@
+import unittest
+import sys
+import types
+
+
+class _App:
+    def route(self, *_args, **_kwargs):
+        return lambda function: function
+
+
+# Ranking is pure Python.  Stub web-only dependencies so this small regression
+# suite can run in a minimal CI environment too.
+sys.modules.setdefault("flask", types.SimpleNamespace(
+    Flask=lambda *_args, **_kwargs: _App(),
+    jsonify=lambda value: value,
+    request=types.SimpleNamespace(),
+    Response=object,
+    stream_with_context=lambda function: function,
+))
+sys.modules.setdefault("flask_cors", types.SimpleNamespace(CORS=lambda *_args, **_kwargs: None))
+sys.modules.setdefault("requests", types.SimpleNamespace(Session=lambda: object(), RequestException=Exception))
+sys.modules.setdefault("yt_dlp", types.SimpleNamespace(YoutubeDL=object))
+sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
+
+from music_service import _is_track_result, _rank_music
+
+
+def track(video_id, title, channel, **extra):
+    return {
+        "ytVideoId": video_id,
+        "trackId": f"yt_{video_id}",
+        "trackName": title,
+        "artistName": channel,
+        "duration": 210,
+        "viewCount": 0,
+        **extra,
+    }
+
+
+class MusicRankingTests(unittest.TestCase):
+    def test_exact_artist_and_title_beat_a_popular_loose_match(self):
+        results = _rank_music([
+            track("viral", "Blinding Lights lyrics", "Random Channel", viewCount=2_000_000_000),
+            track("official", "The Weeknd - Blinding Lights (Official Audio)", "The Weeknd", viewCount=800_000_000),
+        ], "The Weeknd - Blinding Lights", 5)
+        self.assertEqual(results[0]["ytVideoId"], "official")
+
+    def test_popularity_breaks_tie_without_hiding_alternatives(self):
+        results = _rank_music([
+            track("small", "Midnight City", "M83", viewCount=10_000),
+            track("large", "Midnight City", "M83", viewCount=100_000_000),
+        ], "M83 - Midnight City", 5)
+        self.assertEqual([item["ytVideoId"] for item in results], ["large", "small"])
+
+    def test_official_clip_is_kept_and_reaction_is_removed(self):
+        official_clip = {"snippet": {"title": "Artist - Song (Official Music Video)", "channelTitle": "Artist"}}
+        reaction = {"snippet": {"title": "Artist - Song reaction", "channelTitle": "Viewer"}}
+        self.assertTrue(_is_track_result(official_clip))
+        self.assertFalse(_is_track_result(reaction))
+
+
+if __name__ == "__main__":
+    unittest.main()

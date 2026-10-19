@@ -56,11 +56,14 @@ _http = req_lib.Session()
 # Search can return a music-category video that is still a reaction, a live
 # performance, or an editorial clip. Keep the catalogue focused on tracks.
 _NON_TRACK_PATTERN = re.compile(
-    r"\b(?:official\s+(?:music\s+)?video|music\s+video|clip\s+officiel|"
-    r"reaction|r[ée]agit|live|concert|interview|podcast|trailer|teaser|"
-    r"making\s+of|behind\s+the\s+scenes|tutorial|commentary)\b",
+    r"\b(?:reaction|r[ée]agit|interview|podcast|trailer|teaser|"
+    r"making\s+of|behind\s+the\s+scenes|tutorial|commentary|review|"
+    r"full\s+movie|film\s+complet|sound\s+effect|ambience|"
+    r"gameplay|walkthrough)\b",
     re.IGNORECASE,
 )
+
+_OFFICIAL_CHANNEL_PATTERN = re.compile(r"(?:\btopic\b|\bvevo\b|official\b)", re.IGNORECASE)
 
 
 def _with_youtube_cookies(options: dict) -> dict:
@@ -119,6 +122,7 @@ def _normalize_youtube_video(video: dict) -> dict:
     video_id = video.get("id") or ""
     snippet = video.get("snippet") or {}
     details = video.get("contentDetails") or {}
+    statistics = video.get("statistics") or {}
 
     return {
         "trackId": f"yt_{video_id}",
@@ -130,6 +134,7 @@ def _normalize_youtube_video(video: dict) -> dict:
         "artworkSmall": _best_thumbnail(snippet, video_id, small=True),
         "ytVideoId": video_id,
         "duration": _parse_iso8601_duration(details.get("duration", "")),
+        "viewCount": int(statistics.get("viewCount") or 0),
         "genre": "Music",
         "releaseDate": snippet.get("publishedAt") or "",
         "trackNumber": 1,
@@ -155,44 +160,72 @@ def _youtube_api_get(resource: str, params: dict) -> dict:
     return response.json()
 
 
-def _music_score(track: dict, query: str) -> float:
-    """Rank likely songs above unrelated videos without hardcoding artists."""
+def _normalise_search_text(value: str) -> str:
+    """Lowercase and remove accents/punctuation for fair title comparisons."""
     import unicodedata
+    value = unicodedata.normalize("NFKD", str(value or "").casefold())
+    value = "".join(c for c in value if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", value).strip()
 
-    def normalize(value):
-        value = unicodedata.normalize("NFKD", str(value or "").casefold())
-        value = "".join(c for c in value if not unicodedata.combining(c))
-        return re.sub(r"[^a-z0-9]+", " ", value).strip()
 
-    q = normalize(query)
-    title = normalize(track.get("trackName"))
-    channel = normalize(track.get("artistName"))
+def _split_artist_title(query: str) -> tuple[str, str]:
+    """Recognise the common `Artist - Title` request without requiring it."""
+    parts = re.split(r"\s+(?:-|–|—|by|par)\s+", query, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) == 2 and all(parts):
+        return _normalise_search_text(parts[0]), _normalise_search_text(parts[1])
+    return "", _normalise_search_text(query)
+
+
+def _phrase_score(value: str, expected: str, exact: float, partial: float) -> float:
+    if not expected:
+        return 0.0
+    if value == expected:
+        return exact
+    if expected in value:
+        return partial
+    expected_tokens = expected.split()
+    return partial * sum(token in value.split() for token in expected_tokens) / len(expected_tokens)
+
+
+def _is_official_source(track: dict) -> bool:
+    channel = str(track.get("artistName") or "")
+    title = str(track.get("trackName") or "")
+    return bool(
+        _OFFICIAL_CHANNEL_PATTERN.search(channel)
+        or re.search(r"\b(?:official\s+(?:audio|video)|audio\s+officiel|clip\s+officiel|provided\s+to\s+youtube)\b", title, re.I)
+    )
+
+
+def _music_score(track: dict, query: str) -> float:
+    """Rank songs by exact artist/title intent, official sources and reach."""
+    import math
+
+    requested_artist, requested_title = _split_artist_title(query)
+    q = _normalise_search_text(query)
+    title = _normalise_search_text(track.get("trackName"))
+    channel = _normalise_search_text(track.get("artistName"))
     if not q:
         return 0.0
-    tokens = q.split()
-    title_tokens = title.split()
-    score = 0.0
-    if title == q:
-        score += 100
-    elif title.startswith(q + " ") or title.endswith(" " + q):
-        score += 65
-    elif q in title:
-        score += 32
-    score += 24 * sum(t in title_tokens for t in tokens) / len(tokens)
-    score += 8 * sum(t in channel.split() for t in tokens) / len(tokens)
-    if any(x in title for x in ("official audio", "topic", "provided to youtube")):
-        score += 12
-    if channel.endswith(" topic") or "vevo" in channel:
-        score += 12
-    if re.search(r"\\b(movie|film|trailer|reaction|interview|podcast|sound effect|full movie)\\b", title):
-        score -= 100
+
+    score = _phrase_score(title, requested_title or q, 120, 46)
+    score += _phrase_score(channel, requested_artist, 90, 30)
+    if not requested_artist:
+        score += _phrase_score(channel, q, 18, 8)
+    if _is_official_source(track):
+        score += 30
+    if _NON_TRACK_PATTERN.search(f"{title} {channel}"):
+        score -= 180
     if "#" in str(track.get("trackName", "")):
-        score -= 20
+        score -= 12
     duration = int(track.get("duration") or 0)
     if 90 <= duration <= 600:
-        score += 12
+        score += 10
     elif duration > 1200 or (duration and duration < 45):
-        score -= 25
+        score -= 30
+    # Popularity breaks ties without hiding a lower-viewed exact interpretation.
+    views = max(0, int(track.get("viewCount") or 0))
+    if views:
+        score += min(18, math.log10(views + 1) * 2.2)
     return score
 
 
@@ -214,9 +247,8 @@ def _search_youtube_api(term: str, limit: int) -> list:
             "q": term,
             "type": "video",
             "videoCategoryId": "10",
-            # Retrieve a little more than requested so that non-track videos
-            # can be removed without leaving the results view sparse.
-            "maxResults": min(max(limit * 2, 12), 50),
+            # Rank a broad pool rather than trusting YouTube's first results.
+            "maxResults": min(max(limit * 4, 20), 50),
             "safeSearch": "none",
         },
     )
@@ -233,7 +265,7 @@ def _search_youtube_api(term: str, limit: int) -> list:
     details_data = _youtube_api_get(
         "videos",
         {
-            "part": "snippet,contentDetails",
+            "part": "snippet,contentDetails,statistics",
             "id": ",".join(video_ids),
             "maxResults": len(video_ids),
         },
@@ -319,7 +351,7 @@ def _get_youtube_video_api(video_id: str):
     data = _youtube_api_get(
         "videos",
         {
-            "part": "snippet,contentDetails",
+            "part": "snippet,contentDetails,statistics",
             "id": video_id,
             "maxResults": 1,
         },
@@ -339,7 +371,8 @@ def _search_ytdlp(term: str, limit: int) -> list:
     })
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(f"ytsearch{limit}:{term}", download=False)
+        candidate_limit = min(max(limit * 4, 20), 50)
+        info = ydl.extract_info(f"ytsearch{candidate_limit}:{term}", download=False)
 
     tracks = []
     for entry in (info or {}).get("entries", []):
@@ -365,6 +398,7 @@ def _search_ytdlp(term: str, limit: int) -> list:
             "artworkSmall": f"https://i.ytimg.com/vi/{video_id}/default.jpg",
             "ytVideoId": video_id,
             "duration": int(entry.get("duration") or 0),
+            "viewCount": int(entry.get("view_count") or 0),
             "genre": "Music",
             "releaseDate": "",
             "trackNumber": 1,
