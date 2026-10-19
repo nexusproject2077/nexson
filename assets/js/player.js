@@ -334,6 +334,12 @@ const Player = {
     if (this._audioContext?.state === 'suspended') this._audioContext.resume().catch(() => {});
   },
 
+  _resumeAudioContext() {
+    // Changing a preset or spatial mode is a direct user gesture. Resume here
+    // because mobile browsers otherwise keep the freshly-created graph muted.
+    if (this._audioContext?.state === 'suspended') this._audioContext.resume().catch(() => {});
+  },
+
   _isMobileDevice() {
     return window.matchMedia?.('(pointer: coarse)').matches
       || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
@@ -366,25 +372,47 @@ const Player = {
 
   _connectMediaEffects(media) {
     if (!this._audioContext || this._audioNodes.has(media)) return;
-    const context = this._audioContext;
-    const source = context.createMediaElementSource(media);
-    const definitions = [
-      ['lowshelf', 60], ['peaking', 150], ['peaking', 400],
-      ['peaking', 1000], ['peaking', 2400], ['highshelf', 15000],
-    ];
-    const filters = definitions.map(([type, frequency]) => {
-      const filter = context.createBiquadFilter();
-      filter.type = type;
-      filter.frequency.value = frequency;
-      filter.Q.value = 1;
-      return filter;
-    });
-    const panner = context.createStereoPanner ? context.createStereoPanner() : context.createGain();
-    let node = source;
-    filters.forEach(filter => { node.connect(filter); node = filter; });
-    node.connect(panner);
-    panner.connect(context.destination);
-    this._audioNodes.set(media, { filters, panner });
+    try {
+      const context = this._audioContext;
+      const source = context.createMediaElementSource(media);
+      const definitions = [
+        ['lowshelf', 60], ['peaking', 150], ['peaking', 400],
+        ['peaking', 1000], ['peaking', 2400], ['highshelf', 15000],
+      ];
+      const filters = definitions.map(([type, frequency]) => {
+        const filter = context.createBiquadFilter();
+        filter.type = type;
+        filter.frequency.value = frequency;
+        filter.Q.value = 1;
+        return filter;
+      });
+      const panner = context.createStereoPanner ? context.createStereoPanner() : context.createGain();
+      const stereoGain = context.createGain();
+      const spatialGain = context.createGain();
+      const spatialPanner = context.createPanner ? context.createPanner() : null;
+      if (spatialPanner) {
+        spatialPanner.panningModel = 'HRTF';
+        spatialPanner.distanceModel = 'inverse';
+        spatialPanner.refDistance = 1;
+        spatialPanner.maxDistance = 8;
+        spatialPanner.rolloffFactor = 0.55;
+      }
+      let node = source;
+      filters.forEach(filter => { node.connect(filter); node = filter; });
+      node.connect(panner);
+      panner.connect(stereoGain);
+      stereoGain.connect(context.destination);
+      if (spatialPanner) {
+        node.connect(spatialPanner);
+        spatialPanner.connect(spatialGain);
+        spatialGain.connect(context.destination);
+      }
+      stereoGain.gain.value = 1;
+      spatialGain.gain.value = 0;
+      this._audioNodes.set(media, { filters, panner, stereoGain, spatialGain, spatialPanner });
+    } catch (error) {
+      console.warn('[NexSon] Audio effects unavailable for media:', error);
+    }
   },
 
   _applyEqualizer() {
@@ -403,6 +431,7 @@ const Player = {
     this._eqState.bands[index] = Math.max(-12, Math.min(12, Number(value) || 0));
     Store.setEqualizer(this._eqState);
     this._ensureAudioEffects();
+    this._resumeAudioContext();
     this._applyEqualizer();
     const output = document.getElementById(`eq-band-${index}-value`);
     if (output) output.textContent = `${this._eqState.bands[index] > 0 ? '+' : ''}${this._eqState.bands[index]} dB`;
@@ -421,6 +450,7 @@ const Player = {
     this._eqState = { ...this._eqState, enabled: true, preset, bands: [...presets[preset]] };
     Store.setEqualizer(this._eqState);
     this._ensureAudioEffects();
+    this._resumeAudioContext();
     this._applyEqualizer();
     document.querySelectorAll('[data-eq-band]').forEach(input => {
       const index = Number(input.dataset.eqBand);
@@ -435,20 +465,47 @@ const Player = {
     this._eqState.spatial = mode;
     Store.setEqualizer(this._eqState);
     if (mode !== 'off') this._ensureAudioEffects();
+    this._resumeAudioContext();
     this._startSpatialEffect();
   },
 
   _startSpatialEffect() {
     clearInterval(this._spatialTimer);
     const mode = this._eqState?.spatial || 'off';
-    const applyPan = value => this._audioNodes.forEach(({ panner }) => {
-      if (panner.pan) panner.pan.value = value;
+    const route = spatial => this._audioNodes.forEach(({ stereoGain, spatialGain }) => {
+      if (stereoGain) stereoGain.gain.value = spatial ? 0 : 1;
+      if (spatialGain) spatialGain.gain.value = spatial ? 1 : 0;
     });
-    if (mode === 'off') return applyPan(0);
+    const applyPan = value => this._audioNodes.forEach(({ panner }) => {
+      if (panner?.pan) panner.pan.value = value;
+    });
+    const applyPosition = (x, y, z) => this._audioNodes.forEach(({ spatialPanner }) => {
+      if (!spatialPanner) return;
+      if (spatialPanner.positionX) {
+        spatialPanner.positionX.value = x;
+        spatialPanner.positionY.value = y;
+        spatialPanner.positionZ.value = z;
+      } else {
+        spatialPanner.setPosition(x, y, z);
+      }
+    });
+    if (mode === 'off') {
+      route(false);
+      applyPan(0);
+      return;
+    }
+    const useHrtf = mode === '3d' && [...this._audioNodes.values()].some(({ spatialPanner }) => spatialPanner);
+    route(useHrtf);
     const startedAt = performance.now();
-    const speed = mode === '8d' ? 0.65 : 0.22;
     this._spatialTimer = setInterval(() => {
-      applyPan(Math.sin((performance.now() - startedAt) / 1000 * Math.PI * 2 * speed));
+      const seconds = (performance.now() - startedAt) / 1000;
+      if (useHrtf) {
+        // 3D is a restrained binaural orbit: front/back, height and width.
+        applyPosition(Math.sin(seconds * 0.6) * 1.1, Math.sin(seconds * 0.31) * 0.38, -0.8 + Math.cos(seconds * 0.6) * 0.7);
+      } else {
+        // 8D remains the obvious circular stereo movement.
+        applyPan(Math.sin(seconds * Math.PI * 2 * 0.65));
+      }
     }, 40);
   },
 
