@@ -141,6 +141,7 @@ def _normalize_youtube_video(video: dict) -> dict:
         "releaseDate": snippet.get("publishedAt") or "",
         "trackNumber": 1,
         "artistId": snippet.get("channelId") or "",
+        "officialChannel": bool(_OFFICIAL_CHANNEL_PATTERN.search(snippet.get("channelTitle") or "")),
         "source": "youtube-data-api",
         "explicit": False,
         "streamEndpoint": f"/tracks/{video_id}/stream",
@@ -198,6 +199,11 @@ def _is_official_source(track: dict) -> bool:
     )
 
 
+def _canonical_channel_artist(channel: str) -> str:
+    """Make `PNL - Topic` match an artist search for `PNL`."""
+    return re.sub(r"\b(?:topic|vevo|official)\b", "", _normalise_search_text(channel)).strip()
+
+
 def _music_score(track: dict, query: str) -> float:
     """Rank songs by exact artist/title intent, official sources and reach."""
     import math
@@ -206,13 +212,16 @@ def _music_score(track: dict, query: str) -> float:
     q = _normalise_search_text(query)
     title = _normalise_search_text(track.get("trackName"))
     channel = _normalise_search_text(track.get("artistName"))
+    canonical_artist = _canonical_channel_artist(track.get("artistName"))
     if not q:
         return 0.0
 
     score = _phrase_score(title, requested_title or q, 120, 46)
-    score += _phrase_score(channel, requested_artist, 90, 30)
+    score += _phrase_score(canonical_artist, requested_artist, 90, 30)
     if not requested_artist:
-        score += _phrase_score(channel, q, 18, 8)
+        # An artist-only search must privilege that artist's channel over a
+        # fan upload whose title happens to contain the same name.
+        score += _phrase_score(canonical_artist, q, 80, 25)
     if _is_official_source(track):
         score += 30
     if _NON_TRACK_PATTERN.search(f"{title} {channel}"):
@@ -473,6 +482,7 @@ def _search_ytdlp(term: str, limit: int) -> list:
             "releaseDate": "",
             "trackNumber": 1,
             "artistId": entry.get("channel_id") or "",
+            "officialChannel": bool(_OFFICIAL_CHANNEL_PATTERN.search(channel)),
             "source": "youtube-ytdlp",
             "explicit": False,
             "streamEndpoint": f"/tracks/{video_id}/stream",

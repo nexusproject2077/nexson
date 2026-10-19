@@ -74,7 +74,10 @@ const API = {
           else if (title.includes(term)) score += 1800;
           else if (artist.includes(term)) score += 1500;
           else if (album.includes(term)) score += 1200;
+          const canonicalArtist = artist.replace(/\b(?:topic|vevo|official)\b/g, '').replace(/\s+/g, ' ').trim();
+          if (canonicalArtist === term) score += 2600;
         }
+        if (track.officialChannel) score += 750;
         if (artistFilter && artist === artistFilter) score += 2000;
         if (albumFilter && album === albumFilter) score += 1800;
         return { track, score };
@@ -219,6 +222,7 @@ const API = {
         artistName: name,
         genre: track.genre || '',
         artworkUrl: track.artworkUrl || track.artworkSmall || '',
+        officialChannel: Boolean(track.officialChannel),
       });
       return artists;
     }, []);

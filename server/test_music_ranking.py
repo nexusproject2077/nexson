@@ -59,6 +59,13 @@ class MusicRankingTests(unittest.TestCase):
         self.assertTrue(_is_track_result(official_clip))
         self.assertFalse(_is_track_result(reaction))
 
+    def test_artist_search_prioritizes_their_topic_channel(self):
+        results = _rank_music([
+            track("fan", "PNL best mix", "Fan Music", viewCount=2_000_000),
+            track("topic", "Au DD", "PNL - Topic", viewCount=30_000_000),
+        ], "PNL", 5)
+        self.assertEqual(results[0]["ytVideoId"], "topic")
+
     def test_exact_song_and_artist_use_album_artwork(self):
         song = track("cover", "The Weeknd - Blinding Lights (Official Audio)", "The Weeknd")
         metadata = [{
