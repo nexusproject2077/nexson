@@ -47,10 +47,12 @@ YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 
 _url_cache: dict = {}
 _lyrics_cache: dict = {}
+_artwork_cache: dict = {}
 _cache_lock = threading.Lock()
 CACHE_TTL = 3600
 SEARCH_CACHE_TTL = 600
 LYRICS_CACHE_TTL = 3600
+ARTWORK_CACHE_TTL = 21600
 _http = req_lib.Session()
 
 # Search can return a music-category video that is still a reaction, a live
@@ -239,6 +241,74 @@ def _rank_music(tracks: list, term: str, limit: int) -> list:
     return sorted(unique.values(), key=lambda t: _music_score(t, term), reverse=True)[:limit]
 
 
+def _album_artwork_candidates(term: str) -> list:
+    """Fetch one cached music-metadata page; never make playback depend on it."""
+    cache_key = term.casefold()
+    now = time.time()
+    with _cache_lock:
+        cached = _artwork_cache.get(cache_key)
+        if cached and cached["exp"] > now:
+            return cached["value"]
+
+    candidates = []
+    try:
+        response = _http.get(
+            "https://itunes.apple.com/search",
+            params={"term": term, "media": "music", "entity": "song", "limit": 50},
+            timeout=5,
+        )
+        if response.ok:
+            candidates = response.json().get("results") or []
+    except (req_lib.RequestException, ValueError):
+        pass
+
+    with _cache_lock:
+        _artwork_cache[cache_key] = {"value": candidates, "exp": now + ARTWORK_CACHE_TTL}
+    return candidates
+
+
+def _apply_album_artwork(tracks: list, term: str) -> list:
+    """Replace video thumbnails only when title *and* artist identify an album."""
+    candidates = _album_artwork_candidates(term)
+    if not candidates:
+        return tracks
+
+    for track in tracks:
+        raw_title = str(track.get("trackName") or "")
+        artist = _normalise_search_text(track.get("artistName"))
+        title = _normalise_search_text(re.sub(r"\s*[\[(].*?[\])]\s*", " ", raw_title))
+        # Many YouTube results are written as "Artist - Title".  Remove the
+        # artist prefix only when it agrees with the channel name.
+        if " - " in raw_title:
+            prefix, possible_title = raw_title.split(" - ", 1)
+            if _normalise_search_text(prefix) in artist or artist in _normalise_search_text(prefix):
+                title = _normalise_search_text(
+                    re.sub(r"\s*[\[(].*?[\])]\s*", " ", possible_title)
+                )
+
+        best, best_score = None, 0
+        for candidate in candidates:
+            candidate_title = _normalise_search_text(candidate.get("trackName"))
+            candidate_artist = _normalise_search_text(candidate.get("artistName"))
+            if not candidate_title or not candidate_artist:
+                continue
+            score = _phrase_score(title, candidate_title, 110, 45)
+            score += _phrase_score(artist, candidate_artist, 85, 30)
+            if score > best_score:
+                best, best_score = candidate, score
+
+        # A title-only match is too risky for common song names: preserve the
+        # original YouTube thumbnail unless both identities agree.
+        artwork = (best or {}).get("artworkUrl100") if best_score >= 140 else ""
+        if artwork:
+            track["videoArtworkUrl"] = track.get("artworkUrl", "")
+            track["artworkUrl"] = artwork.replace("100x100bb", "600x600bb")
+            track["artworkSmall"] = artwork
+            track["collectionName"] = track.get("collectionName") or best.get("collectionName", "")
+            track["collectionId"] = track.get("collectionId") or str(best.get("collectionId") or "")
+    return tracks
+
+
 def _search_youtube_api(term: str, limit: int) -> list:
     search_data = _youtube_api_get(
         "search",
@@ -283,7 +353,7 @@ def _search_youtube_api(term: str, limit: int) -> list:
         if item and _is_track_result(item):
             tracks.append(_normalize_youtube_video(item))
 
-    return _rank_music(tracks, term, limit)
+    return _rank_music(_apply_album_artwork(tracks, term), term, limit)
 
 
 def _is_track_result(video: dict) -> bool:
@@ -409,7 +479,7 @@ def _search_ytdlp(term: str, limit: int) -> list:
             "videoEndpoint": f"/tracks/{video_id}/video",
         })
 
-    return _rank_music(tracks, term, limit)
+    return _rank_music(_apply_album_artwork(tracks, term), term, limit)
 
 
 def _audio_quality_score(format_info: dict) -> tuple:
