@@ -352,7 +352,7 @@ const Views = {
                   </div>
                 </div>
                 <div class="card-title">${UI.escape(a.artistName)}</div>
-                <div class="card-subtitle">Artiste</div>
+                <div class="card-subtitle">${a.officialChannel ? 'Chaîne officielle' : 'Artiste'}</div>
               </div>
             `).join('')}
           </div>
