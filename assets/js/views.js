@@ -179,25 +179,58 @@ const Views = {
   },
 
   _renderQuickAccess() {
-    const recent  = Store.getRecent().slice(0, 6);
+    const recent  = Store.getRecent().slice(0, 27);
     const section = document.getElementById('quick-access-section');
     if (!section || !recent.length) return;
 
+    const pages = Array.from(
+      { length: Math.ceil(recent.length / 9) },
+      (_, pageIndex) => recent.slice(pageIndex * 9, pageIndex * 9 + 9)
+    );
+
     section.innerHTML = `
-      <div class="quick-access" style="margin-bottom:40px">
-        ${recent.map(t => `
-          <div class="quick-item" onclick="Player.playTrack(${JSON.stringify(t).replace(/"/g, '&quot;')}, ${JSON.stringify(recent).replace(/"/g, '&quot;')}, ${recent.indexOf(t)})">
-            <div class="quick-item-cover">
-              ${t.artworkUrl
-                ? `<img src="${t.artworkUrl}" alt="${UI.escape(t.trackName)}" loading="lazy">`
-                : `<div class="quick-item-cover-gradient"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>`
-              }
-            </div>
-            <span class="quick-item-name">${UI.escape(t.trackName)}</span>
+      <section class="home-quick-access" aria-label="Accès rapide">
+        <div class="section-header home-quick-header">
+          <span class="section-title">Accès rapide</span>
+          <span class="home-quick-count">${recent.length} titre${recent.length > 1 ? 's' : ''}</span>
+        </div>
+        <div class="home-quick-carousel" onscroll="Views.updateQuickAccessDots(this)" tabindex="0" aria-label="Fais glisser pour voir plus de titres">
+          ${pages.map((page, pageIndex) => `
+            <div class="home-quick-page" data-page="${pageIndex}">
+              ${page.map(track => {
+                const index = recent.indexOf(track);
+                return `
+                  <button class="home-quick-tile" onclick="Player.playTrack(${JSON.stringify(track).replace(/"/g, '&quot;')}, ${JSON.stringify(recent).replace(/"/g, '&quot;')}, ${index})" aria-label="Lire ${UI.escape(track.trackName)} par ${UI.escape(track.artistName)}">
+                    <span class="home-quick-cover">
+                      ${track.artworkUrl
+                        ? `<img src="${track.artworkUrl}" alt="" loading="lazy">`
+                        : `<span class="home-quick-cover-fallback"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>`
+                      }
+                    </span>
+                    <span class="home-quick-name">${UI.escape(track.trackName)}</span>
+                  </button>`;
+              }).join('')}
+            </div>`).join('')}
           </div>
-        `).join('')}
-      </div>
+        ${pages.length > 1 ? `<div class="home-quick-dots" role="tablist" aria-label="Pages d’accès rapide">
+          ${pages.map((_, index) => `<button class="home-quick-dot ${index === 0 ? 'active' : ''}" role="tab" aria-label="Page ${index + 1}" aria-selected="${index === 0}" onclick="Views.scrollQuickAccess(${index})"></button>`).join('')}
+        </div>` : ''}
+      </section>
     `;
+  },
+
+  scrollQuickAccess(pageIndex) {
+    const carousel = document.querySelector('.home-quick-carousel');
+    if (carousel) carousel.scrollTo({ left: carousel.clientWidth * pageIndex, behavior: 'smooth' });
+  },
+
+  updateQuickAccessDots(carousel) {
+    const page = Math.round(carousel.scrollLeft / Math.max(1, carousel.clientWidth));
+    document.querySelectorAll('.home-quick-dot').forEach((dot, index) => {
+      const active = index === page;
+      dot.classList.toggle('active', active);
+      dot.setAttribute('aria-selected', String(active));
+    });
   },
 
   _renderHomeRecent() {
