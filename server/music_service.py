@@ -155,6 +155,57 @@ def _youtube_api_get(resource: str, params: dict) -> dict:
     return response.json()
 
 
+def _music_score(track: dict, query: str) -> float:
+    """Rank likely songs above unrelated videos without hardcoding artists."""
+    import unicodedata
+
+    def normalize(value):
+        value = unicodedata.normalize("NFKD", str(value or "").casefold())
+        value = "".join(c for c in value if not unicodedata.combining(c))
+        return re.sub(r"[^a-z0-9]+", " ", value).strip()
+
+    q = normalize(query)
+    title = normalize(track.get("trackName"))
+    channel = normalize(track.get("artistName"))
+    if not q:
+        return 0.0
+    tokens = q.split()
+    title_tokens = title.split()
+    score = 0.0
+    if title == q:
+        score += 100
+    elif title.startswith(q + " ") or title.endswith(" " + q):
+        score += 65
+    elif q in title:
+        score += 32
+    score += 24 * sum(t in title_tokens for t in tokens) / len(tokens)
+    score += 8 * sum(t in channel.split() for t in tokens) / len(tokens)
+    if any(x in title for x in ("official audio", "topic", "provided to youtube")):
+        score += 12
+    if channel.endswith(" topic") or "vevo" in channel:
+        score += 12
+    if re.search(r"\\b(movie|film|trailer|reaction|interview|podcast|sound effect|full movie)\\b", title):
+        score -= 100
+    if "#" in str(track.get("trackName", "")):
+        score -= 20
+    duration = int(track.get("duration") or 0)
+    if 90 <= duration <= 600:
+        score += 12
+    elif duration > 1200 or (duration and duration < 45):
+        score -= 25
+    return score
+
+
+def _rank_music(tracks: list, term: str, limit: int) -> list:
+    """Stable sort; preserve API response format and YouTube IDs."""
+    unique = {}
+    for track in tracks:
+        key = track.get("ytVideoId") or track.get("trackId")
+        if key and key not in unique:
+            unique[key] = track
+    return sorted(unique.values(), key=lambda t: _music_score(t, term), reverse=True)[:limit]
+
+
 def _search_youtube_api(term: str, limit: int) -> list:
     search_data = _youtube_api_get(
         "search",
@@ -199,10 +250,8 @@ def _search_youtube_api(term: str, limit: int) -> list:
         item = by_id.get(video_id)
         if item and _is_track_result(item):
             tracks.append(_normalize_youtube_video(item))
-        if len(tracks) >= limit:
-            break
 
-    return tracks
+    return _rank_music(tracks, term, limit)
 
 
 def _is_track_result(video: dict) -> bool:
@@ -326,7 +375,7 @@ def _search_ytdlp(term: str, limit: int) -> list:
             "videoEndpoint": f"/tracks/{video_id}/video",
         })
 
-    return tracks
+    return _rank_music(tracks, term, limit)
 
 
 def _audio_quality_score(format_info: dict) -> tuple:
@@ -570,7 +619,7 @@ def search():
     if not term:
         return jsonify([])
 
-    cache_key = f"search:{term.casefold()}:{limit}"
+    cache_key = f"search:v2:{term.casefold()}:{limit}"
     now = time.time()
     with _cache_lock:
         cached = _url_cache.get(cache_key)
