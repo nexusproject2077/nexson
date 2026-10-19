@@ -1077,6 +1077,7 @@ const Player = {
   },
 
   _updatePlayUI(playing) {
+    document.body.classList.toggle('is-playing', playing);
     if ('mediaSession' in navigator) {
       try { navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'; } catch (_) {}
     }
