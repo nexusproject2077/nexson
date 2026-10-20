@@ -194,7 +194,8 @@ def _is_official_source(track: dict) -> bool:
     channel = str(track.get("artistName") or "")
     title = str(track.get("trackName") or "")
     return bool(
-        _OFFICIAL_CHANNEL_PATTERN.search(channel)
+        track.get("officialChannel")
+        or _OFFICIAL_CHANNEL_PATTERN.search(channel)
         or re.search(r"\b(?:official\s+(?:audio|video)|audio\s+officiel|clip\s+officiel|provided\s+to\s+youtube)\b", title, re.I)
     )
 
@@ -202,6 +203,19 @@ def _is_official_source(track: dict) -> bool:
 def _canonical_channel_artist(channel: str) -> str:
     """Make `PNL - Topic` match an artist search for `PNL`."""
     return re.sub(r"\b(?:topic|vevo|official)\b", "", _normalise_search_text(channel)).strip()
+
+
+def _channel_handle(value: str) -> str:
+    """Extract a stable @handle from the YouTube channel metadata URL."""
+    match = re.search(r"@([\w.-]+)", str(value or ""))
+    return f"@{match.group(1).casefold()}" if match else ""
+
+
+def _handle_matches_query(handle: str, query: str) -> bool:
+    # An identical handle alone does not prove that a channel is official.
+    # Keep explicit associations limited to channels supplied by the user.
+    known_handles = {"pnl": "@pnl"}
+    return bool(handle) and known_handles.get(_normalise_search_text(query)) == handle.casefold()
 
 
 def _music_score(track: dict, query: str) -> float:
@@ -355,12 +369,37 @@ def _search_youtube_api(term: str, limit: int) -> list:
         for item in details_data.get("items", [])
         if item.get("id")
     }
+    channel_ids = list({
+        (item.get("snippet") or {}).get("channelId")
+        for item in by_id.values()
+        if (item.get("snippet") or {}).get("channelId")
+    })
+    channel_details = {"items": []}
+    if channel_ids:
+        try:
+            channel_details = _youtube_api_get(
+                "channels",
+                {"part": "snippet", "id": ",".join(channel_ids), "maxResults": len(channel_ids)},
+            )
+        except Exception as exc:
+            print(f"[NexSon] YouTube channel details unavailable: {exc}")
+    channel_handles = {
+        item.get("id"): _channel_handle((item.get("snippet") or {}).get("customUrl"))
+        for item in channel_details.get("items", [])
+        if item.get("id")
+    }
 
     tracks = []
     for video_id in video_ids:
         item = by_id.get(video_id)
         if item and _is_track_result(item):
-            tracks.append(_normalize_youtube_video(item))
+            track = _normalize_youtube_video(item)
+            handle = channel_handles.get(track.get("artistId"), "")
+            if handle:
+                track["channelHandle"] = handle
+                track["channelUrl"] = f"https://music.youtube.com/{handle}"
+                track["officialChannel"] = track["officialChannel"] or _handle_matches_query(handle, term)
+            tracks.append(track)
 
     return _rank_music(_apply_album_artwork(tracks, term), term, limit)
 
@@ -482,7 +521,9 @@ def _search_ytdlp(term: str, limit: int) -> list:
             "releaseDate": "",
             "trackNumber": 1,
             "artistId": entry.get("channel_id") or "",
-            "officialChannel": bool(_OFFICIAL_CHANNEL_PATTERN.search(channel)),
+            "channelHandle": _channel_handle(entry.get("channel_url") or entry.get("uploader_url")),
+            "channelUrl": entry.get("channel_url") or entry.get("uploader_url") or "",
+            "officialChannel": bool(_OFFICIAL_CHANNEL_PATTERN.search(channel)) or _handle_matches_query(_channel_handle(entry.get("channel_url") or entry.get("uploader_url")), term),
             "source": "youtube-ytdlp",
             "explicit": False,
             "streamEndpoint": f"/tracks/{video_id}/stream",
