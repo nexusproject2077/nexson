@@ -280,9 +280,7 @@ const Views = {
     // One VPS lookup powers titles, artists and albums. Local ranking makes
     // exact matches immediately rise above partial YouTube matches.
     const querySpec = API.parseSearchQuery(query);
-    // Ask the service for its complete result page.  Do not silently cut the
-    // list to the first 5 or 20 tracks: the compact block below is an aperçu,
-    // while the full ranked list remains available further down the page.
+    // Display the full page returned by the service, without a five-song preview.
     const sourceTracks = await API.searchSongs(querySpec.lookup, 50);
     const songs = API.rankAndFilterTracks(sourceTracks, querySpec);
     const artists = API._artistsFromTracks(songs, 5);
@@ -328,9 +326,9 @@ const Views = {
             ` : ''}
           </div>
           <div>
-            <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Aperçu des titres</h3>
+            <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Tous les titres <span style="font-size:14px">${songs.length}</span></h3>
             <div class="track-list track-list-compact">
-              ${songs.slice(0, 5).map((t, i) => this._renderTrackItem(t, songs, i, false)).join('')}
+              ${songs.map((t, i) => this._renderTrackItem(t, songs, i, false)).join('')}
             </div>
           </div>
         </div>
@@ -367,21 +365,6 @@ const Views = {
           <h3 style="font-size:20px;font-weight:800;margin-bottom:20px">Albums</h3>
           <div class="cards-grid">
             ${albums.map(a => this._renderAlbumCard(a)).join('')}
-          </div>
-        </div>
-      `;
-    }
-
-    // All songs
-    if (songs.length > 5) {
-      container.innerHTML += `
-        <div class="section-block">
-          <h3 style="font-size:20px;font-weight:800;margin-bottom:20px">Tous les titres <span style="color:var(--text-muted);font-size:14px;font-weight:600">${songs.length}</span></h3>
-          <div class="track-list-header">
-            <span>#</span><span>Titre</span><span>Album</span><span>Durée</span><span></span>
-          </div>
-          <div class="track-list">
-            ${songs.map((t, i) => this._renderTrackItem(t, songs, i, true)).join('')}
           </div>
         </div>
       `;
