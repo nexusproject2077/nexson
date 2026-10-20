@@ -7,13 +7,14 @@ const Views = {
 
   /* ══════════════════════════════ HOME ══════ */
   async renderHome() {
+    this._homeSectionObserver?.disconnect();
     const content = document.getElementById('page-content');
     const hour    = new Date().getHours();
     const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
     const user    = Store.getUser();
     const activity = this._homeActivity || 'all';
     const contexts = {
-      all: { label: 'Pour toi', query: 'popular music', subtitle: 'Des sélections basées sur tes écoutes récentes' },
+      all: { label: 'Pour toi', query: 'popular music', subtitle: 'Retrouve tes écoutes et découvre de la musique' },
       sport: { label: 'Sport', query: 'workout energy', subtitle: 'Du rythme pour rester en mouvement' },
       focus: { label: 'Concentration', query: 'focus instrumental', subtitle: 'Une ambiance calme pour avancer' },
       relax: { label: 'Détente', query: 'relax chill', subtitle: 'Ralentis, prends le temps' },
@@ -40,29 +41,6 @@ const Views = {
       <!-- Quick access: recently played -->
       <div id="quick-access-section"></div>
 
-      <div class="home-radio section-block">
-        <div class="section-header">
-          <span class="section-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v2M21 12h-2M12 21v-2M3 12h2"/></svg>Radio rapide</span>
-        </div>
-        <div class="radio-list">${FEATURED_ARTISTS.slice(0, 6).map(name => `<button class="radio-chip" onclick="Search.quick('${name.replace(/'/g, "\\'")} radio')"><span class="radio-avatar">${UI.escape(name.charAt(0))}</span><span>Radio ${UI.escape(name)}</span></button>`).join('')}</div>
-      </div>
-
-      <!-- Hero Banner -->
-      <div class="hero-banner" onclick="Router.navigate('search')">
-        <div class="hero-content">
-          <div class="hero-tag">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          Découverte
-        </div>
-          <h2 class="hero-title">Millions de titres,<br>100% gratuit</h2>
-          <p class="hero-sub">Écoute, explore, partage.</p>
-          <button class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            Explorer maintenant
-          </button>
-        </div>
-      </div>
-
       <!-- Sections -->
       <div id="home-top-hits" class="section-block">
         <div class="section-header">
@@ -73,6 +51,13 @@ const Views = {
           <span class="section-see-all" onclick="Search.quick('${context.query}')">Voir tout</span>
         </div>
         <div class="loading-state"><div class="spinner"></div><span>Chargement…</span></div>
+      </div>
+
+      <div class="home-radio section-block">
+        <div class="section-header">
+          <span class="section-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v2M21 12h-2M12 21v-2M3 12h2"/></svg>Radio rapide</span>
+        </div>
+        <div class="radio-list">${FEATURED_ARTISTS.slice(0, 6).map(name => `<button class="radio-chip" onclick="Search.quick('${name.replace(/'/g, "\\'")} radio')"><span class="radio-avatar">${UI.escape(name.charAt(0))}</span><span>Radio ${UI.escape(name)}</span></button>`).join('')}</div>
       </div>
 
       <div id="home-genres" class="section-block">
@@ -94,16 +79,6 @@ const Views = {
           <span class="section-see-all" onclick="Search.quick('chillout ambient')">Voir tout</span>
         </div>
         <div class="loading-state"><div class="spinner"></div></div>
-      </div>
-
-      <div id="home-recent" class="section-block" style="display:none">
-        <div class="section-header">
-          <span class="section-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Récemment écouté
-          </span>
-        </div>
-        <div id="home-recent-list"></div>
       </div>
 
       <div id="home-afro" class="section-block">
@@ -132,19 +107,38 @@ const Views = {
     // Quick access (recent)
     this._renderQuickAccess();
 
-    // Recent played
-    this._renderHomeRecent();
-
-    // Load music async
+    // Load the first section immediately; defer the others until near view.
     this._loadHomeSection('home-top-hits', context.query, 8);
-    this._loadHomeSection('home-chill', 'lofi chill', 8);
-    this._loadHomeSection('home-afro', 'new music releases', 8);
-    this._loadHomeSection('home-rap', 'energy mix', 8);
+    this._deferHomeSections([
+      ['home-chill', 'lofi chill'],
+      ['home-afro', 'new music releases'],
+      ['home-rap', 'energy mix'],
+    ]);
   },
 
   setHomeActivity(activity) {
     this._homeActivity = activity;
     this.renderHome();
+  },
+
+  _deferHomeSections(sections) {
+    if (!('IntersectionObserver' in window)) {
+      sections.forEach(([id, query]) => this._loadHomeSection(id, query, 8));
+      return;
+    }
+    const queries = new Map(sections);
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        observer.unobserve(entry.target);
+        this._loadHomeSection(entry.target.id, queries.get(entry.target.id), 8);
+      });
+    }, { rootMargin: '300px' });
+    this._homeSectionObserver = observer;
+    sections.forEach(([id]) => {
+      const element = document.getElementById(id);
+      if (element) observer.observe(element);
+    });
   },
 
   _renderGenresGrid() {
@@ -162,13 +156,22 @@ const Views = {
   async _loadHomeSection(sectionId, query, limit = 8) {
     const section = document.getElementById(sectionId);
     if (!section) return;
-    const tracks = await API.searchSongs(query, limit);
+    let tracks;
+    try {
+      tracks = await API.searchSongs(query, limit);
+    } catch (error) {
+      console.warn('[NexSon] Home section unavailable:', error);
+      tracks = [];
+    }
+    if (!section.isConnected) return;
     const spinner = section.querySelector('.loading-state');
     if (spinner) spinner.remove();
 
     if (!tracks.length) {
-      section.querySelector('.section-block, div:last-child').innerHTML =
-        '<p style="color:var(--text-muted);padding:20px">Aucun résultat</p>';
+      const message = document.createElement('p');
+      message.style.cssText = 'color:var(--text-muted);padding:20px';
+      message.textContent = 'Aucun titre disponible pour le moment';
+      section.appendChild(message);
       return;
     }
 
