@@ -23,7 +23,7 @@ sys.modules.setdefault("requests", types.SimpleNamespace(Session=lambda: object(
 sys.modules.setdefault("yt_dlp", types.SimpleNamespace(YoutubeDL=object))
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
 
-from music_service import _apply_album_artwork, _is_track_result, _rank_music
+from music_service import _apply_album_artwork, _handle_matches_query, _is_track_result, _rank_music
 
 
 def track(video_id, title, channel, **extra):
@@ -65,6 +65,10 @@ class MusicRankingTests(unittest.TestCase):
             track("topic", "Au DD", "PNL - Topic", viewCount=30_000_000),
         ], "PNL", 5)
         self.assertEqual(results[0]["ytVideoId"], "topic")
+
+    def test_official_handle_matches_artist_query(self):
+        self.assertTrue(_handle_matches_query("@pnl", "PNL"))
+        self.assertFalse(_handle_matches_query("@pnlfan", "PNL"))
 
     def test_exact_song_and_artist_use_album_artwork(self):
         song = track("cover", "The Weeknd - Blinding Lights (Official Audio)", "The Weeknd")
