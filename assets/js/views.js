@@ -29,12 +29,12 @@ const Views = {
 
       <div class="activity-bar" aria-label="Choisir une ambiance">
         ${[
-          ['all', 'Pour toi', '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>'],
-          ['sport', 'Sport', '<path d="M6 7h3v10H6zM15 7h3v10h-3z"/><path d="M3 10h3M18 10h3"/>'],
-          ['focus', 'Concentration', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'],
-          ['relax', 'Détente', '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'],
-          ['commute', 'Trajet', '<path d="M3 16h18"/><path d="M5 16V8l3-3h8l3 3v8"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>'],
-        ].map(([id, label, icon]) => `<button class="activity-chip ${activity === id ? 'active' : ''}" onclick="Views.setHomeActivity('${id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icon}</svg>${label}</button>`).join('')}
+          ['all', 'Pour toi', '<path d="m12 3 2.8 5.7 6.3.9-4.55 4.44 1.07 6.27L12 17.35l-5.62 2.96 1.07-6.27L2.9 9.6l6.3-.9L12 3Z"/>'],
+          ['sport', 'Sport', '<path d="M3 9v6M6 7v10M9 9v6M15 9v6M18 7v10M21 9v6M9 12h6"/>'],
+          ['focus', 'Concentration', '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'],
+          ['relax', 'Détente', '<path d="M20.5 13.2A8.5 8.5 0 0 1 10.8 3.5a8.5 8.5 0 1 0 9.7 9.7Z"/>'],
+          ['commute', 'Trajet', '<rect x="5" y="4" width="14" height="14" rx="3"/><path d="M5 11h14M8 18v2M16 18v2M8.5 15h.01M15.5 15h.01"/>'],
+        ].map(([id, label, icon]) => `<button class="activity-chip ${activity === id ? 'active' : ''}" onclick="Views.setHomeActivity('${id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${icon}</svg>${label}</button>`).join('')}
       </div>
 
       <!-- Quick access: recently played -->
