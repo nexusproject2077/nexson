@@ -121,7 +121,10 @@ const Player = {
       }
     });
     media.addEventListener('playing', () => {
-      if (isActive()) { this._loadingTrackId = ''; this._setLoading(false); this._emitState('playing'); }
+      if (isActive()) {
+        this._loadingTrackId = ''; this._setLoading(false); this._emitState('playing');
+        this._warmNextTrack();
+      }
     });
     media.addEventListener('waiting', () => { if (isActive()) this._setLoading(true); });
     media.addEventListener('stalled', () => { if (isActive()) this._setLoading(true); });
@@ -700,6 +703,23 @@ const Player = {
     }
     if (this.queueIdx < this.queue.length - 1) return this.queueIdx + 1;
     return this.repeat === 'all' ? 0 : null;
+  },
+
+  _warmNextTrack() {
+    if (navigator.connection?.saveData || !CONFIG.CUSTOM_MUSIC_API_ENABLED || !CONFIG.CUSTOM_MUSIC_API) return;
+    const nextIdx = this._nextQueueIndex();
+    const next = nextIdx === null ? null : this.queue[nextIdx];
+    if (!next || (!String(next.trackId || '').startsWith('yt_') && !String(next.source || '').startsWith('youtube'))) return;
+    const id = String(next?.ytVideoId || next?.trackId || '').replace(/^yt_/, '');
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id) || this._warmingTrackId === id) return;
+    this._warmingTrackId = id;
+    const base = CONFIG.CUSTOM_MUSIC_API.replace(/\/$/, '');
+    fetch(`${base}/tracks/${encodeURIComponent(id)}/prepare`, { method: 'POST' })
+      .then(response => {
+        if (!response.ok && this._warmingTrackId === id) this._warmingTrackId = '';
+        else if (response.ok) setTimeout(() => { if (this._warmingTrackId === id) this._warmingTrackId = ''; }, 600000);
+      })
+      .catch(() => { if (this._warmingTrackId === id) this._warmingTrackId = ''; });
   },
 
   async _prepareCrossfade() {

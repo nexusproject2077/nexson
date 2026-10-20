@@ -625,23 +625,26 @@ def _resolve_stream_url(video_id: str, quality: str = "very-high") -> str:
         },
     })
 
-    url = ""
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(
             f"https://www.youtube.com/watch?v={video_id}",
             download=False,
         )
 
-        url = _best_audio_url(info, quality)
+        urls = {
+            level: _best_audio_url(info, level)
+            for level in ("low", "normal", "high", "very-high")
+        }
 
-    if url:
-        with _cache_lock:
-            _url_cache[f"audio:{quality}:{video_id}"] = {
-                "url": url,
-                "exp": now + CACHE_TTL,
-            }
+    with _cache_lock:
+        for level, url in urls.items():
+            if url:
+                _url_cache[f"audio:{level}:{video_id}"] = {
+                    "url": url,
+                    "exp": time.time() + CACHE_TTL,
+                }
 
-    return url
+    return urls.get(quality, "")
 
 
 def _resolve_video_url(video_id: str) -> str:
@@ -853,6 +856,20 @@ def track(video_id):
 def track_stream(video_id):
     clean_id = video_id.replace("yt_", "", 1).strip()
     return _proxy_stream(clean_id)
+
+
+@app.route("/tracks/<video_id>/prepare", methods=["POST"])
+def prepare_track(video_id):
+    """Warm only the URL cache; do not download or proxy the audio body."""
+    clean_id = video_id.replace("yt_", "", 1).strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{11}", clean_id):
+        return jsonify({"error": "Identifiant invalide"}), 400
+    try:
+        if _resolve_stream_url(clean_id):
+            return jsonify({"ready": True})
+        return jsonify({"ready": False}), 404
+    except Exception:
+        return jsonify({"ready": False}), 503
 
 
 @app.route("/tracks/<video_id>/video")

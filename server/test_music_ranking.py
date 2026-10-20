@@ -24,6 +24,7 @@ sys.modules.setdefault("yt_dlp", types.SimpleNamespace(YoutubeDL=object))
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
 
 from music_service import _apply_album_artwork, _handle_matches_query, _is_track_result, _rank_music
+import music_service
 
 
 def track(video_id, title, channel, **extra):
@@ -39,6 +40,20 @@ def track(video_id, title, channel, **extra):
 
 
 class MusicRankingTests(unittest.TestCase):
+    def test_one_extraction_populates_all_audio_quality_levels(self):
+        info = {"formats": [
+            {"vcodec": "none", "url": "low-url", "abr": 64},
+            {"vcodec": "none", "url": "high-url", "abr": 192},
+        ]}
+        extractor = unittest.mock.MagicMock()
+        extractor.__enter__.return_value.extract_info.return_value = info
+        with patch.dict(music_service._url_cache, {}, clear=True), patch.object(
+            music_service.yt_dlp, "YoutubeDL", return_value=extractor
+        ) as factory:
+            self.assertEqual(music_service._resolve_stream_url("test", "low"), "low-url")
+            self.assertEqual(music_service._resolve_stream_url("test", "very-high"), "high-url")
+            self.assertEqual(factory.call_count, 1)
+
     def test_exact_artist_and_title_beat_a_popular_loose_match(self):
         results = _rank_music([
             track("viral", "Blinding Lights lyrics", "Random Channel", viewCount=2_000_000_000),
