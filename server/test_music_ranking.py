@@ -54,6 +54,13 @@ class MusicRankingTests(unittest.TestCase):
         ], "M83 - Midnight City", 5)
         self.assertEqual([item["ytVideoId"] for item in results], ["large", "small"])
 
+    def test_long_videos_are_excluded_from_music_results(self):
+        results = _rank_music([
+            track("film", "Artist documentary", "Artist", duration=1_244),
+            track("song", "Artist - Song", "Artist", duration=240),
+        ], "Artist", 5)
+        self.assertEqual([item["ytVideoId"] for item in results], ["song"])
+
     def test_official_clip_is_kept_and_reaction_is_removed(self):
         official_clip = {"snippet": {"title": "Artist - Song (Official Music Video)", "channelTitle": "Artist"}}
         reaction = {"snippet": {"title": "Artist - Song reaction", "channelTitle": "Viewer"}}
