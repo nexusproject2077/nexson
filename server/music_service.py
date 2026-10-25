@@ -80,6 +80,7 @@ _MUSIC_VIDEO_PATTERN = re.compile(
     r"video\s+officiel|clip\s+officiel|official\s+clip)\b",
     re.IGNORECASE,
 )
+_YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def _with_youtube_cookies(options: dict) -> dict:
@@ -136,6 +137,19 @@ def _parse_view_count(value) -> int:
     return int(number * multiplier)
 
 
+def _parse_duration_seconds(value) -> int:
+    """Accept seconds or YouTube Music's ``MM:SS``/``HH:MM:SS`` durations."""
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    parts = str(value or "").strip().split(":")
+    if not parts or len(parts) > 3 or not all(part.isdigit() for part in parts):
+        return 0
+    seconds = 0
+    for part in parts:
+        seconds = seconds * 60 + int(part)
+    return seconds
+
+
 def _normalise_ytmusic_song(song: dict) -> dict:
     """Map ytmusicapi song data to NexSon's existing public API contract."""
     video_id = song.get("videoId") or song.get("video_id") or ""
@@ -153,7 +167,9 @@ def _normalise_ytmusic_song(song: dict) -> dict:
         "artworkUrl": _best_ytmusic_thumbnail(thumbnails, video_id),
         "artworkSmall": _best_ytmusic_thumbnail(thumbnails, video_id, small=True),
         "ytVideoId": video_id,
-        "duration": int(song.get("duration_seconds") or song.get("lengthSeconds") or 0),
+        "duration": _parse_duration_seconds(
+            song.get("duration_seconds") or song.get("lengthSeconds") or song.get("duration")
+        ),
         "viewCount": _parse_view_count(song.get("views") or song.get("viewCount")),
         "genre": "Music",
         "releaseDate": song.get("year") or song.get("publishDate") or "",
@@ -391,6 +407,11 @@ def _is_preferred_audio_result(title: str, channel: str = "") -> bool:
     )
 
 
+def _is_youtube_video_id(value: str) -> bool:
+    """Only accept actual YouTube video IDs, never channel or playlist IDs."""
+    return bool(_YOUTUBE_VIDEO_ID_PATTERN.fullmatch(str(value or "")))
+
+
 def _get_lyrics(artist: str, title: str, album: str = "", duration: int = 0) -> dict:
     """Fetch free lyrics server-side so provider failures never reach the UI."""
     cache_key = f"{artist.casefold()}::{title.casefold()}::{duration}"
@@ -476,7 +497,7 @@ def _search_ytdlp(term: str, limit: int) -> list:
             continue
 
         video_id = entry.get("id") or entry.get("videoId")
-        if not video_id:
+        if not _is_youtube_video_id(video_id):
             continue
 
         title = entry.get("title", "Inconnu")
