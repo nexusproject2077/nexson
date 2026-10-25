@@ -24,7 +24,7 @@ sys.modules.setdefault("yt_dlp", types.SimpleNamespace(YoutubeDL=object))
 sys.modules.setdefault("ytmusicapi", types.SimpleNamespace(YTMusic=object))
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
 
-from music_service import _apply_album_artwork, _handle_matches_query, _is_track_result, _normalise_ytmusic_song, _parse_view_count, _rank_music, _search_catalogue
+from music_service import _apply_album_artwork, _handle_matches_query, _is_preferred_audio_result, _is_track_result, _normalise_ytmusic_song, _parse_view_count, _rank_music, _search_catalogue
 
 
 def track(video_id, title, channel, **extra):
@@ -59,6 +59,11 @@ class MusicRankingTests(unittest.TestCase):
         reaction = {"snippet": {"title": "Artist - Song reaction", "channelTitle": "Viewer"}}
         self.assertTrue(_is_track_result(official_clip))
         self.assertFalse(_is_track_result(reaction))
+
+    def test_ytdlp_fallback_excludes_music_video_versions(self):
+        self.assertFalse(_is_preferred_audio_result("Artist - Song (Official Music Video)", "Artist"))
+        self.assertFalse(_is_preferred_audio_result("Artist - Song (Clip officiel)", "Artist"))
+        self.assertTrue(_is_preferred_audio_result("Artist - Song (Official Audio)", "Artist"))
 
     def test_artist_search_prioritizes_their_topic_channel(self):
         results = _rank_music([
