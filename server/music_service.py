@@ -331,6 +331,18 @@ def _search_ytmusic(term: str, limit: int) -> list:
     return _rank_music(_apply_album_artwork(tracks, term), term, limit)
 
 
+def _search_catalogue(term: str, limit: int) -> list:
+    """Prefer YouTube Music, but never expose an empty transient catalogue."""
+    try:
+        tracks = _search_ytmusic(term, limit)
+        if tracks:
+            return tracks
+        print("[NexSon] ytmusicapi returned no songs, using yt-dlp fallback")
+    except Exception as exc:
+        print(f"[NexSon] ytmusicapi search failed, using yt-dlp: {exc}")
+    return _search_ytdlp(term, limit)
+
+
 def _is_track_result(video: dict) -> bool:
     """Reject YouTube visual/editorial content from the music catalogue."""
     snippet = video.get("snippet") or {}
@@ -715,24 +727,15 @@ def search():
             return response
 
     try:
-        tracks = _search_ytmusic(term, limit)
+        tracks = _search_catalogue(term, limit)
         with _cache_lock:
             _url_cache[cache_key] = {"value": tracks, "exp": now + SEARCH_CACHE_TTL}
         response = jsonify(tracks)
         response.headers["Cache-Control"] = "public, max-age=300"
         return response
     except Exception as exc:
-        print(f"[NexSon] ytmusicapi search failed, using yt-dlp: {exc}")
-        try:
-            tracks = _search_ytdlp(term, limit)
-            with _cache_lock:
-                _url_cache[cache_key] = {"value": tracks, "exp": now + SEARCH_CACHE_TTL}
-            response = jsonify(tracks)
-            response.headers["Cache-Control"] = "public, max-age=300"
-            return response
-        except Exception as fallback_exc:
-            traceback.print_exc()
-            return jsonify({"error": str(fallback_exc)}), 500
+        traceback.print_exc()
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/lyrics")
