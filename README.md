@@ -104,6 +104,9 @@ YOUTUBE_API_KEY=ta_cle_youtube_data_api
 # Optional but required if YouTube asks yt-dlp to sign in before streaming.
 # This file stays on the VPS; never commit it or publish it.
 YOUTUBE_COOKIEFILE=/etc/nexson/youtube-cookies.txt
+# Optional: browser-session headers for reliable ytmusicapi searches on a VPS.
+# Create this file locally on the VPS; never commit or share it.
+YTMUSIC_AUTH_FILE=/etc/nexson/ytmusic-browser.json
 MUSIC_PORT=5000
 ```
 
@@ -125,7 +128,9 @@ GET http://127.0.0.1:5000/tracks/VIDEO_ID
 GET http://127.0.0.1:5000/tracks/VIDEO_ID/stream
 ```
 
-La recherche et les métadonnées utilisent le catalogue public YouTube Music par `ytmusicapi`, puis le classement NexSon V3 (correspondance artiste/titre, sources officielles et popularité). Si YouTube Music est indisponible, `yt-dlp` prend temporairement le relais. La lecture audio reste gérée côté serveur par le service de streaming et le lecteur HTML5 NexSon.
+La recherche et les métadonnées utilisent le catalogue YouTube Music par `ytmusicapi`, puis le classement NexSon V3 (correspondance artiste/titre, sources officielles et popularité). Si YouTube Music est indisponible, `yt-dlp` prend temporairement le relais. La lecture audio reste gérée côté serveur par le service de streaming et le lecteur HTML5 NexSon.
+
+Sur un VPS, YouTube Music peut renvoyer une liste vide en accès public. Pour une session fiable, crée `ytmusic-browser.json` uniquement sur le VPS avec `ytmusicapi browser`, puis indique son chemin via `YTMUSIC_AUTH_FILE`. Ce fichier contient les en-têtes et cookies de ta session YouTube Music : ne l'envoie jamais, ne le commite jamais et limite ses permissions (`chmod 600`).
 
 ### 2. Relier GitHub Pages au VPS
 

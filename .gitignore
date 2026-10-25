@@ -2,6 +2,8 @@
 .env.*
 !.env.example
 server/.env
+server/ytmusic-browser.json
+ytmusic-browser.json
 node_modules/
 __pycache__/
 *.pyc
