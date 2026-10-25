@@ -61,6 +61,7 @@ CACHE_TTL = 3600
 SEARCH_CACHE_TTL = 600
 LYRICS_CACHE_TTL = 3600
 ARTWORK_CACHE_TTL = 21600
+MAX_TRACK_DURATION = 600
 _http = req_lib.Session()
 
 # Search can return a music-category video that is still a reaction, a live
@@ -260,9 +261,17 @@ def _music_score(track: dict, query: str) -> float:
 
 
 def _rank_music(tracks: list, term: str, limit: int) -> list:
-    """Stable sort; preserve API response format and YouTube IDs."""
+    """Stable sort; preserve API response format and omit long non-music videos."""
     unique = {}
     for track in tracks:
+        try:
+            duration = int(track.get("duration") or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        # Unknown durations remain eligible, but a known 10+ minute result is
+        # much more likely to be a film, compilation, or editorial video.
+        if duration > MAX_TRACK_DURATION:
+            continue
         key = track.get("ytVideoId") or track.get("trackId")
         if key and key not in unique:
             unique[key] = track
