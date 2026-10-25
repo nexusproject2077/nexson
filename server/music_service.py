@@ -80,6 +80,7 @@ _MUSIC_VIDEO_PATTERN = re.compile(
     r"video\s+officiel|clip\s+officiel|official\s+clip)\b",
     re.IGNORECASE,
 )
+_YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def _with_youtube_cookies(options: dict) -> dict:
@@ -391,6 +392,11 @@ def _is_preferred_audio_result(title: str, channel: str = "") -> bool:
     )
 
 
+def _is_youtube_video_id(value: str) -> bool:
+    """Only accept actual YouTube video IDs, never channel or playlist IDs."""
+    return bool(_YOUTUBE_VIDEO_ID_PATTERN.fullmatch(str(value or "")))
+
+
 def _get_lyrics(artist: str, title: str, album: str = "", duration: int = 0) -> dict:
     """Fetch free lyrics server-side so provider failures never reach the UI."""
     cache_key = f"{artist.casefold()}::{title.casefold()}::{duration}"
@@ -476,7 +482,7 @@ def _search_ytdlp(term: str, limit: int) -> list:
             continue
 
         video_id = entry.get("id") or entry.get("videoId")
-        if not video_id:
+        if not _is_youtube_video_id(video_id):
             continue
 
         title = entry.get("title", "Inconnu")
