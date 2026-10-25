@@ -24,7 +24,7 @@ sys.modules.setdefault("yt_dlp", types.SimpleNamespace(YoutubeDL=object))
 sys.modules.setdefault("ytmusicapi", types.SimpleNamespace(YTMusic=object))
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
 
-from music_service import _apply_album_artwork, _handle_matches_query, _is_track_result, _normalise_ytmusic_song, _parse_view_count, _rank_music
+from music_service import _apply_album_artwork, _handle_matches_query, _is_track_result, _normalise_ytmusic_song, _parse_view_count, _rank_music, _search_catalogue
 
 
 def track(video_id, title, channel, **extra):
@@ -112,6 +112,14 @@ class MusicRankingTests(unittest.TestCase):
         self.assertEqual(_parse_view_count("1.4M views"), 1_400_000)
         self.assertEqual(_parse_view_count("22K"), 22_000)
         self.assertEqual(_parse_view_count(None), 0)
+
+    def test_empty_ytmusic_response_uses_ytdlp_fallback(self):
+        expected = [track("fallback", "Song", "Artist")]
+        with patch("music_service._search_ytmusic", return_value=[]), patch(
+            "music_service._search_ytdlp", return_value=expected
+        ) as fallback:
+            self.assertEqual(_search_catalogue("Artist - Song", 5), expected)
+        fallback.assert_called_once_with("Artist - Song", 5)
 
 
 if __name__ == "__main__":
