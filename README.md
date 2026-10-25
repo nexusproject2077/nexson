@@ -83,9 +83,9 @@ API_BASE: 'http://localhost:3001',  // ← ton URL backend
 
 ---
 
-## API musicale YouTube
+## Recherche musicale YouTube Music
 
-Le frontend ne contient aucune clé Google. La clé YouTube Data API v3 reste uniquement sur le VPS dans `server/.env`.
+Le frontend ne contient aucune clé Google. La recherche utilise `ytmusicapi` et ne consomme pas l'API YouTube Data. `yt-dlp` reste uniquement le secours de recherche et le moteur de lecture des flux audio/vidéo.
 
 ### 1. Configurer le service musical
 
@@ -95,9 +95,11 @@ cp .env.example .env
 nano .env
 ```
 
-Ajoute la clé dans le fichier local `.env` :
+Configure les options locales dans `.env` :
 
 ```env
+# Option historique: elle n'est plus lue par le service de recherche.
+# La laisser en place évite de supprimer un secret existant sur le VPS.
 YOUTUBE_API_KEY=ta_cle_youtube_data_api
 # Optional but required if YouTube asks yt-dlp to sign in before streaming.
 # This file stays on the VPS; never commit it or publish it.
@@ -123,7 +125,7 @@ GET http://127.0.0.1:5000/tracks/VIDEO_ID
 GET http://127.0.0.1:5000/tracks/VIDEO_ID/stream
 ```
 
-La recherche et les métadonnées utilisent l'API YouTube officielle. La lecture audio reste gérée côté serveur par le service de streaming et le lecteur HTML5 NexSon.
+La recherche et les métadonnées utilisent le catalogue public YouTube Music par `ytmusicapi`, puis le classement NexSon V3 (correspondance artiste/titre, sources officielles et popularité). Si YouTube Music est indisponible, `yt-dlp` prend temporairement le relais. La lecture audio reste gérée côté serveur par le service de streaming et le lecteur HTML5 NexSon.
 
 ### 2. Relier GitHub Pages au VPS
 

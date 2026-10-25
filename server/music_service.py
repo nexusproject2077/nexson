@@ -3,8 +3,8 @@
 NexSon – Music Service
 
 Search metadata:
-  1. YouTube Data API v3 (official, via YOUTUBE_API_KEY)
-  2. yt-dlp fallback if the API key is unavailable
+  1. ytmusicapi (unofficial YouTube Music catalogue)
+  2. yt-dlp fallback if YouTube Music is temporarily unavailable
 
 Audio playback:
   yt-dlp resolves the media URL and this service proxies the audio stream.
@@ -32,6 +32,7 @@ from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
 import requests as req_lib
 import yt_dlp
+from ytmusicapi import YTMusic
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -39,11 +40,15 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+# This legacy secret stays available in existing VPS environments but is not
+# read by the service anymore.  It can be removed only when the deployment
+# configuration is deliberately cleaned up.
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
 # Path to a Netscape-format cookie export.  This must live on the VPS and is
 # intentionally only read from the environment; never put cookies in Git.
 YOUTUBE_COOKIEFILE = os.getenv("YOUTUBE_COOKIEFILE", "").strip()
-YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
+_ytmusic = None
+_ytmusic_lock = threading.Lock()
 
 _url_cache: dict = {}
 _lyrics_cache: dict = {}
@@ -78,89 +83,69 @@ def _with_youtube_cookies(options: dict) -> dict:
     return options
 
 
-def _parse_iso8601_duration(value: str) -> int:
-    """Convertit une durée ISO 8601 YouTube (PT3M42S) en secondes."""
-    if not value:
-        return 0
+def _get_ytmusic() -> YTMusic:
+    """Create the public YouTube Music client lazily and reuse its session."""
+    global _ytmusic
+    with _ytmusic_lock:
+        if _ytmusic is None:
+            _ytmusic = YTMusic()
+        return _ytmusic
 
-    match = re.fullmatch(
-        r"P(?:(?P<days>\d+)D)?T"
-        r"(?:(?P<hours>\d+)H)?"
-        r"(?:(?P<minutes>\d+)M)?"
-        r"(?:(?P<seconds>\d+)S)?",
-        value,
-    )
+
+def _best_ytmusic_thumbnail(thumbnails: list, video_id: str, small: bool = False) -> str:
+    thumbnails = thumbnails or []
+    ordered = sorted(thumbnails, key=lambda item: (item or {}).get("width", 0))
+    if ordered:
+        item = ordered[0] if small else ordered[-1]
+        if item.get("url"):
+            return item["url"]
+    suffix = "default.jpg" if small else "hqdefault.jpg"
+    return f"https://i.ytimg.com/vi/{video_id}/{suffix}"
+
+
+def _parse_view_count(value) -> int:
+    """Accept ytmusicapi's human-readable counts (for example ``1.4M``)."""
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    match = re.search(r"([\d.,]+)\s*([KMB])?", str(value or "").upper())
     if not match:
         return 0
-
-    parts = {k: int(v or 0) for k, v in match.groupdict().items()}
-    return (
-        parts["days"] * 86400
-        + parts["hours"] * 3600
-        + parts["minutes"] * 60
-        + parts["seconds"]
-    )
+    number = float(match.group(1).replace(",", ""))
+    multiplier = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}.get(match.group(2), 1)
+    return int(number * multiplier)
 
 
-def _best_thumbnail(snippet: dict, video_id: str, small: bool = False) -> str:
-    thumbs = (snippet or {}).get("thumbnails") or {}
-    order = ("default", "medium", "high", "standard", "maxres") if small else (
-        "maxres", "standard", "high", "medium", "default"
-    )
-
-    for key in order:
-        url = (thumbs.get(key) or {}).get("url")
-        if url:
-            return url
-
-    return (
-        f"https://i.ytimg.com/vi/{video_id}/default.jpg"
-        if small
-        else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-    )
-
-
-def _normalize_youtube_video(video: dict) -> dict:
-    video_id = video.get("id") or ""
-    snippet = video.get("snippet") or {}
-    details = video.get("contentDetails") or {}
-    statistics = video.get("statistics") or {}
-
+def _normalise_ytmusic_song(song: dict) -> dict:
+    """Map ytmusicapi song data to NexSon's existing public API contract."""
+    video_id = song.get("videoId") or song.get("video_id") or ""
+    artists = song.get("artists") or []
+    artist_names = ", ".join(item.get("name", "") for item in artists if item.get("name"))
+    artist = artist_names or song.get("author") or "Artiste inconnu"
+    album = song.get("album") or {}
+    thumbnails = song.get("thumbnails") or (song.get("thumbnail") or {}).get("thumbnails") or []
     return {
         "trackId": f"yt_{video_id}",
-        "trackName": snippet.get("title") or "Inconnu",
-        "artistName": snippet.get("channelTitle") or "Artiste inconnu",
-        "collectionName": "",
-        "collectionId": "",
-        "artworkUrl": _best_thumbnail(snippet, video_id),
-        "artworkSmall": _best_thumbnail(snippet, video_id, small=True),
+        "trackName": song.get("title") or "Inconnu",
+        "artistName": artist,
+        "collectionName": album.get("name") or "",
+        "collectionId": album.get("id") or "",
+        "artworkUrl": _best_ytmusic_thumbnail(thumbnails, video_id),
+        "artworkSmall": _best_ytmusic_thumbnail(thumbnails, video_id, small=True),
         "ytVideoId": video_id,
-        "duration": _parse_iso8601_duration(details.get("duration", "")),
-        "viewCount": int(statistics.get("viewCount") or 0),
+        "duration": int(song.get("duration_seconds") or song.get("lengthSeconds") or 0),
+        "viewCount": _parse_view_count(song.get("views") or song.get("viewCount")),
         "genre": "Music",
-        "releaseDate": snippet.get("publishedAt") or "",
-        "trackNumber": 1,
-        "artistId": snippet.get("channelId") or "",
-        "officialChannel": bool(_OFFICIAL_CHANNEL_PATTERN.search(snippet.get("channelTitle") or "")),
-        "source": "youtube-data-api",
-        "explicit": False,
+        "releaseDate": song.get("year") or song.get("publishDate") or "",
+        "trackNumber": int(song.get("trackNumber") or 1),
+        "artistId": next((item.get("id", "") for item in artists if item.get("id")), song.get("channelId") or ""),
+        "channelHandle": "",
+        "channelUrl": "",
+        "officialChannel": bool(song.get("isOfficial")) or bool(_OFFICIAL_CHANNEL_PATTERN.search(artist)),
+        "source": "ytmusicapi",
+        "explicit": bool(song.get("isExplicit")),
         "streamEndpoint": f"/tracks/{video_id}/stream",
         "videoEndpoint": f"/tracks/{video_id}/video",
     }
-
-
-def _youtube_api_get(resource: str, params: dict) -> dict:
-    if not YOUTUBE_API_KEY:
-        raise RuntimeError("YOUTUBE_API_KEY absente")
-
-    query = {**params, "key": YOUTUBE_API_KEY}
-    response = _http.get(
-        f"{YOUTUBE_API_BASE}/{resource}",
-        params=query,
-        timeout=12,
-    )
-    response.raise_for_status()
-    return response.json()
 
 
 def _normalise_search_text(value: str) -> str:
@@ -332,75 +317,17 @@ def _apply_album_artwork(tracks: list, term: str) -> list:
     return tracks
 
 
-def _search_youtube_api(term: str, limit: int) -> list:
-    search_data = _youtube_api_get(
-        "search",
-        {
-            "part": "snippet",
-            "q": term,
-            "type": "video",
-            "videoCategoryId": "10",
-            # Rank a broad pool rather than trusting YouTube's first results.
-            "maxResults": min(max(limit * 4, 20), 50),
-            "safeSearch": "none",
-        },
-    )
-
-    video_ids = [
-        (item.get("id") or {}).get("videoId")
-        for item in search_data.get("items", [])
-    ]
-    video_ids = [video_id for video_id in video_ids if video_id]
-
-    if not video_ids:
-        return []
-
-    details_data = _youtube_api_get(
-        "videos",
-        {
-            "part": "snippet,contentDetails,statistics",
-            "id": ",".join(video_ids),
-            "maxResults": len(video_ids),
-        },
-    )
-
-    by_id = {
-        item.get("id"): item
-        for item in details_data.get("items", [])
-        if item.get("id")
-    }
-    channel_ids = list({
-        (item.get("snippet") or {}).get("channelId")
-        for item in by_id.values()
-        if (item.get("snippet") or {}).get("channelId")
-    })
-    channel_details = {"items": []}
-    if channel_ids:
-        try:
-            channel_details = _youtube_api_get(
-                "channels",
-                {"part": "snippet", "id": ",".join(channel_ids), "maxResults": len(channel_ids)},
-            )
-        except Exception as exc:
-            print(f"[NexSon] YouTube channel details unavailable: {exc}")
-    channel_handles = {
-        item.get("id"): _channel_handle((item.get("snippet") or {}).get("customUrl"))
-        for item in channel_details.get("items", [])
-        if item.get("id")
-    }
-
+def _search_ytmusic(term: str, limit: int) -> list:
+    """Search YouTube Music songs and apply NexSon's stable V3 ranking."""
+    candidate_limit = min(max(limit * 4, 20), 50)
+    results = _get_ytmusic().search(term, filter="songs", limit=candidate_limit)
     tracks = []
-    for video_id in video_ids:
-        item = by_id.get(video_id)
-        if item and _is_track_result(item):
-            track = _normalize_youtube_video(item)
-            handle = channel_handles.get(track.get("artistId"), "")
-            if handle:
-                track["channelHandle"] = handle
-                track["channelUrl"] = f"https://music.youtube.com/{handle}"
-                track["officialChannel"] = track["officialChannel"] or _handle_matches_query(handle, term)
+    for result in results or []:
+        if not result or not (result.get("videoId") or result.get("video_id")):
+            continue
+        track = _normalise_ytmusic_song(result)
+        if not _NON_TRACK_PATTERN.search(f"{track['trackName']} {track['artistName']}"):
             tracks.append(track)
-
     return _rank_music(_apply_album_artwork(tracks, term), term, limit)
 
 
@@ -465,19 +392,21 @@ def _get_lyrics(artist: str, title: str, album: str = "", duration: int = 0) -> 
     return result
 
 
-def _get_youtube_video_api(video_id: str):
-    data = _youtube_api_get(
-        "videos",
-        {
-            "part": "snippet,contentDetails,statistics",
-            "id": video_id,
-            "maxResults": 1,
-        },
-    )
-    items = data.get("items", [])
-    if not items:
+def _get_ytmusic_track(video_id: str):
+    """Resolve a single track without re-enabling the YouTube Data API."""
+    song = _get_ytmusic().get_song(video_id)
+    details = (song or {}).get("videoDetails") or {}
+    if not details:
         return None
-    return _normalize_youtube_video(items[0])
+    return _normalise_ytmusic_song({
+        "videoId": video_id,
+        "title": details.get("title"),
+        "author": details.get("author"),
+        "channelId": details.get("channelId"),
+        "lengthSeconds": details.get("lengthSeconds"),
+        "thumbnail": details.get("thumbnail"),
+        "isExplicit": details.get("isExplicit"),
+    })
 
 
 def _search_ytdlp(term: str, limit: int) -> list:
@@ -756,9 +685,11 @@ def health():
     return jsonify({
         "status": "ok",
         "service": "NexSon Music Service",
-        "youtubeDataApi": bool(YOUTUBE_API_KEY),
+        # Keep this field for existing clients; the Data API is intentionally
+        # disabled even when an older VPS .env still contains its key.
+        "youtubeDataApi": False,
         "youtubeCookieFileConfigured": bool(YOUTUBE_COOKIEFILE and os.path.isfile(YOUTUBE_COOKIEFILE)),
-        "searchProvider": "youtube-data-api" if YOUTUBE_API_KEY else "yt-dlp",
+        "searchProvider": "ytmusicapi",
     })
 
 
@@ -774,7 +705,7 @@ def search():
     if not term:
         return jsonify([])
 
-    cache_key = f"search:v2:{term.casefold()}:{limit}"
+    cache_key = f"search:v3-ytmusic:{term.casefold()}:{limit}"
     now = time.time()
     with _cache_lock:
         cached = _url_cache.get(cache_key)
@@ -783,28 +714,25 @@ def search():
             response.headers["Cache-Control"] = "public, max-age=300"
             return response
 
-    if YOUTUBE_API_KEY:
-        try:
-            tracks = _search_youtube_api(term, limit)
-            if tracks:
-                with _cache_lock:
-                    _url_cache[cache_key] = {"value": tracks, "exp": now + SEARCH_CACHE_TTL}
-                response = jsonify(tracks)
-                response.headers["Cache-Control"] = "public, max-age=300"
-                return response
-        except Exception as exc:
-            print(f"[NexSon] YouTube Data API search failed: {exc}")
-
     try:
-        tracks = _search_ytdlp(term, limit)
+        tracks = _search_ytmusic(term, limit)
         with _cache_lock:
             _url_cache[cache_key] = {"value": tracks, "exp": now + SEARCH_CACHE_TTL}
         response = jsonify(tracks)
         response.headers["Cache-Control"] = "public, max-age=300"
         return response
     except Exception as exc:
-        traceback.print_exc()
-        return jsonify({"error": str(exc)}), 500
+        print(f"[NexSon] ytmusicapi search failed, using yt-dlp: {exc}")
+        try:
+            tracks = _search_ytdlp(term, limit)
+            with _cache_lock:
+                _url_cache[cache_key] = {"value": tracks, "exp": now + SEARCH_CACHE_TTL}
+            response = jsonify(tracks)
+            response.headers["Cache-Control"] = "public, max-age=300"
+            return response
+        except Exception as fallback_exc:
+            traceback.print_exc()
+            return jsonify({"error": str(fallback_exc)}), 500
 
 
 @app.route("/lyrics")
@@ -828,13 +756,12 @@ def track(video_id):
     if not clean_id:
         return jsonify({"error": "ID manquant"}), 400
 
-    if YOUTUBE_API_KEY:
-        try:
-            result = _get_youtube_video_api(clean_id)
-            if result:
-                return jsonify(result)
-        except Exception as exc:
-            print(f"[NexSon] YouTube Data API track failed: {exc}")
+    try:
+        result = _get_ytmusic_track(clean_id)
+        if result:
+            return jsonify(result)
+    except Exception as exc:
+        print(f"[NexSon] ytmusicapi track lookup failed: {exc}")
 
     try:
         results = _search_ytdlp(
@@ -868,9 +795,8 @@ def stream():
 
 
 if __name__ == "__main__":
-    provider = "YouTube Data API v3" if YOUTUBE_API_KEY else "yt-dlp fallback"
     print("NexSon Music Service démarré sur http://localhost:5000")
-    print(f"Recherche: {provider}")
+    print("Recherche: ytmusicapi (yt-dlp en secours)")
     print("Endpoints: /health  /search  /tracks/<id>  /tracks/<id>/stream")
     app.run(
         host="0.0.0.0",
