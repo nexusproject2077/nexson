@@ -21,9 +21,10 @@ sys.modules.setdefault("flask", types.SimpleNamespace(
 sys.modules.setdefault("flask_cors", types.SimpleNamespace(CORS=lambda *_args, **_kwargs: None))
 sys.modules.setdefault("requests", types.SimpleNamespace(Session=lambda: object(), RequestException=Exception))
 sys.modules.setdefault("yt_dlp", types.SimpleNamespace(YoutubeDL=object))
+sys.modules.setdefault("ytmusicapi", types.SimpleNamespace(YTMusic=object))
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
 
-from music_service import _apply_album_artwork, _handle_matches_query, _is_track_result, _rank_music
+from music_service import _apply_album_artwork, _handle_matches_query, _is_track_result, _normalise_ytmusic_song, _parse_view_count, _rank_music
 
 
 def track(video_id, title, channel, **extra):
@@ -84,6 +85,33 @@ class MusicRankingTests(unittest.TestCase):
         self.assertEqual(result["artworkUrl"], "https://cover.example/600x600bb.jpg")
         self.assertEqual(result["collectionName"], "After Hours")
         self.assertEqual(result["videoArtworkUrl"], "")
+
+    def test_ytmusic_song_preserves_the_existing_track_contract(self):
+        result = _normalise_ytmusic_song({
+            "videoId": "abc123",
+            "title": "Song",
+            "artists": [{"name": "Artist", "id": "artist-id"}],
+            "album": {"name": "Album", "id": "album-id"},
+            "duration_seconds": 210,
+            "thumbnails": [
+                {"url": "https://image.example/small.jpg", "width": 60},
+                {"url": "https://image.example/large.jpg", "width": 544},
+            ],
+            "isExplicit": True,
+        })
+        self.assertEqual(result["trackId"], "yt_abc123")
+        self.assertEqual(result["ytVideoId"], "abc123")
+        self.assertEqual(result["artistName"], "Artist")
+        self.assertEqual(result["artworkUrl"], "https://image.example/large.jpg")
+        self.assertEqual(result["artworkSmall"], "https://image.example/small.jpg")
+        self.assertEqual(result["streamEndpoint"], "/tracks/abc123/stream")
+        self.assertEqual(result["source"], "ytmusicapi")
+        self.assertTrue(result["explicit"])
+
+    def test_ytmusic_human_readable_view_counts_are_safe_for_ranking(self):
+        self.assertEqual(_parse_view_count("1.4M views"), 1_400_000)
+        self.assertEqual(_parse_view_count("22K"), 22_000)
+        self.assertEqual(_parse_view_count(None), 0)
 
 
 if __name__ == "__main__":

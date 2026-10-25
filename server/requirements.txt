@@ -1,6 +1,7 @@
 flask>=3.0.0
 flask-cors>=4.0.0
 yt-dlp>=2024.1.0
+ytmusicapi>=1.12.3
 requests>=2.31.0
 
 python-dotenv>=1.0.0
