@@ -104,8 +104,17 @@ def _get_ytmusic() -> YTMusic:
 
 
 def _best_ytmusic_thumbnail(thumbnails: list, video_id: str, small: bool = False) -> str:
-    thumbnails = thumbnails or []
-    ordered = sorted(thumbnails, key=lambda item: (item or {}).get("width", 0))
+    candidates = [item for item in (thumbnails or []) if (item or {}).get("url")]
+    # Song results can occasionally contain both a wide video still and album
+    # art. Prefer a genuine square image; changing URL crop parameters would
+    # only crop a video frame and would not create album artwork.
+    square = [
+        item for item in candidates
+        if item.get("width") and item.get("height")
+        and abs(int(item["width"]) - int(item["height"])) <= max(2, int(item["width"]) * 0.08)
+    ]
+    preferred = square or candidates
+    ordered = sorted(preferred, key=lambda item: min(int(item.get("width") or 0), int(item.get("height") or 0)))
     if ordered:
         item = ordered[0] if small else ordered[-1]
         if item.get("url"):
