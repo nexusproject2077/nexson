@@ -74,6 +74,11 @@ _NON_TRACK_PATTERN = re.compile(
 )
 
 _OFFICIAL_CHANNEL_PATTERN = re.compile(r"(?:\btopic\b|\bvevo\b|official\b)", re.IGNORECASE)
+_MUSIC_VIDEO_PATTERN = re.compile(
+    r"\b(?:official\s+(?:music\s+)?video|music\s+video|"
+    r"video\s+officiel|clip\s+officiel|official\s+clip)\b",
+    re.IGNORECASE,
+)
 
 
 def _with_youtube_cookies(options: dict) -> dict:
@@ -360,6 +365,14 @@ def _is_track_result(video: dict) -> bool:
     return not _NON_TRACK_PATTERN.search(text)
 
 
+def _is_preferred_audio_result(title: str, channel: str = "") -> bool:
+    """Keep audio releases in the generic YouTube fallback, not video clips."""
+    return not (
+        _NON_TRACK_PATTERN.search(f"{title} {channel}")
+        or _MUSIC_VIDEO_PATTERN.search(title or "")
+    )
+
+
 def _get_lyrics(artist: str, title: str, album: str = "", duration: int = 0) -> dict:
     """Fetch free lyrics server-side so provider failures never reach the UI."""
     cache_key = f"{artist.casefold()}::{title.casefold()}::{duration}"
@@ -450,7 +463,7 @@ def _search_ytdlp(term: str, limit: int) -> list:
 
         title = entry.get("title", "Inconnu")
         channel = entry.get("uploader") or entry.get("channel") or ""
-        if _NON_TRACK_PATTERN.search(f"{title} {channel}"):
+        if not _is_preferred_audio_result(title, channel):
             continue
 
         tracks.append({
