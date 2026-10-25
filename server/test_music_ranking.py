@@ -24,7 +24,7 @@ sys.modules.setdefault("yt_dlp", types.SimpleNamespace(YoutubeDL=object))
 sys.modules.setdefault("ytmusicapi", types.SimpleNamespace(YTMusic=object))
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
 
-from music_service import _apply_album_artwork, _handle_matches_query, _is_preferred_audio_result, _is_track_result, _normalise_ytmusic_song, _parse_view_count, _rank_music, _search_catalogue
+from music_service import _apply_album_artwork, _best_ytmusic_thumbnail, _handle_matches_query, _is_preferred_audio_result, _is_track_result, _normalise_ytmusic_song, _parse_view_count, _rank_music, _search_catalogue
 
 
 def track(video_id, title, channel, **extra):
@@ -112,6 +112,15 @@ class MusicRankingTests(unittest.TestCase):
         self.assertEqual(result["streamEndpoint"], "/tracks/abc123/stream")
         self.assertEqual(result["source"], "ytmusicapi")
         self.assertTrue(result["explicit"])
+
+    def test_ytmusic_prefers_a_square_album_thumbnail_over_a_wide_video_still(self):
+        thumbnails = [
+            {"url": "https://image.example/video.jpg", "width": 1280, "height": 720},
+            {"url": "https://image.example/cover-small.jpg", "width": 120, "height": 120},
+            {"url": "https://image.example/cover-large.jpg", "width": 600, "height": 600},
+        ]
+        self.assertEqual(_best_ytmusic_thumbnail(thumbnails, "abc123"), "https://image.example/cover-large.jpg")
+        self.assertEqual(_best_ytmusic_thumbnail(thumbnails, "abc123", small=True), "https://image.example/cover-small.jpg")
 
     def test_ytmusic_human_readable_view_counts_are_safe_for_ranking(self):
         self.assertEqual(_parse_view_count("1.4M views"), 1_400_000)
