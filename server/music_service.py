@@ -137,6 +137,19 @@ def _parse_view_count(value) -> int:
     return int(number * multiplier)
 
 
+def _parse_duration_seconds(value) -> int:
+    """Accept seconds or YouTube Music's ``MM:SS``/``HH:MM:SS`` durations."""
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    parts = str(value or "").strip().split(":")
+    if not parts or len(parts) > 3 or not all(part.isdigit() for part in parts):
+        return 0
+    seconds = 0
+    for part in parts:
+        seconds = seconds * 60 + int(part)
+    return seconds
+
+
 def _normalise_ytmusic_song(song: dict) -> dict:
     """Map ytmusicapi song data to NexSon's existing public API contract."""
     video_id = song.get("videoId") or song.get("video_id") or ""
@@ -154,7 +167,9 @@ def _normalise_ytmusic_song(song: dict) -> dict:
         "artworkUrl": _best_ytmusic_thumbnail(thumbnails, video_id),
         "artworkSmall": _best_ytmusic_thumbnail(thumbnails, video_id, small=True),
         "ytVideoId": video_id,
-        "duration": int(song.get("duration_seconds") or song.get("lengthSeconds") or 0),
+        "duration": _parse_duration_seconds(
+            song.get("duration_seconds") or song.get("lengthSeconds") or song.get("duration")
+        ),
         "viewCount": _parse_view_count(song.get("views") or song.get("viewCount")),
         "genre": "Music",
         "releaseDate": song.get("year") or song.get("publishDate") or "",
